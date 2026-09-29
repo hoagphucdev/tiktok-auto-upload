@@ -122,28 +122,36 @@ export async function publishVideo({
   }
 
   let init
-  if (mode === 'inbox') {
-    init = await initInboxUpload(token, sourceInfo)
-  } else {
+  if (mode === 'direct') {
     const creator = await queryCreatorInfo(token)
     if (!creator.privacy_level_options?.includes(privacy)) {
       throw new Error(
         `Privacy "${privacy}" không được phép cho tài khoản này. Cho phép: ${creator.privacy_level_options?.join(', ')}`,
       )
     }
-    init = await initDirectPost(
-      token,
-      {
-        title: caption,
-        privacy_level: privacy,
-        disable_comment: disableComment || creator.comment_disabled,
-        disable_duet: disableDuet || creator.duet_disabled,
-        disable_stitch: disableStitch || creator.stitch_disabled,
-        ...(coverMs != null && { video_cover_timestamp_ms: Number(coverMs) }),
-      },
-      sourceInfo,
-    )
+    try {
+      init = await initDirectPost(
+        token,
+        {
+          title: caption,
+          privacy_level: privacy,
+          disable_comment: disableComment || creator.comment_disabled,
+          disable_duet: disableDuet || creator.duet_disabled,
+          disable_stitch: disableStitch || creator.stitch_disabled,
+          ...(coverMs != null && { video_cover_timestamp_ms: Number(coverMs) }),
+        },
+        sourceInfo,
+      )
+    } catch (err) {
+      // App chưa được TikTok duyệt chỉ đăng thẳng được lên tài khoản đang để riêng tư
+      if (err.code !== 'unaudited_client_can_only_post_to_private_accounts') throw err
+      console.warn(
+        '⚠ App chưa được TikTok duyệt nên chỉ đăng thẳng được khi tài khoản TikTok để "riêng tư" → gửi vào hộp nháp thay thế.',
+      )
+      mode = 'inbox'
+    }
   }
+  if (mode === 'inbox') init = await initInboxUpload(token, sourceInfo)
 
   console.log(`→ ${path.basename(file)} (${(size / MB).toFixed(1)}MB, ${plan.count} chunk) publish_id=${init.publish_id}`)
   await uploadFile(init.upload_url, file, size, plan)
