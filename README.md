@@ -30,6 +30,49 @@ node src/cli.mjs upload ./video.mp4 -c "Gipsy Danger #robot #fyp" -p PUBLIC_TO_E
 - ⚠️ Tự động hoá qua trình duyệt không phải cách TikTok chính thức hỗ trợ. Hãy đăng với tần suất
   vừa phải (vài video mỗi ngày) để tránh tài khoản bị hạn chế.
 
+### Dùng Brave
+
+**Cách A: tool tự mở Brave.** Thêm vào `.env`:
+
+```env
+TIKTOK_BROWSER=brave
+```
+
+Tool tự tìm Brave ở chỗ cài mặc định trên Windows, macOS và Linux. Nếu không thấy, đặt
+`CHROMIUM_PATH` trỏ tới `brave.exe`. Brave sẽ mở bằng profile riêng `.browser-profile/`, nên
+lần đầu bạn vẫn chạy `node src/cli.mjs login` để đăng nhập TikTok.
+
+**Cách B: mở tab trong cửa sổ Brave bạn đang dùng.**
+
+1. Mở Brave kèm cổng điều khiển. Brave (giống Chrome bản mới) chỉ cho bật cổng này khi dùng một
+   thư mục profile **riêng**, không phải profile mặc định:
+
+   ```bat
+   :: Windows
+   "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" --remote-debugging-port=9222 --user-data-dir="%LOCALAPPDATA%\BraveTikTok"
+   ```
+
+   ```bash
+   # macOS
+   "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" --remote-debugging-port=9222 --user-data-dir="$HOME/.brave-tiktok"
+   # Linux
+   brave-browser --remote-debugging-port=9222 --user-data-dir="$HOME/.brave-tiktok"
+   ```
+
+   Nên tạo shortcut cho lệnh này. Lần đầu, đăng nhập TikTok trong cửa sổ Brave đó; các lần sau
+   Brave nhớ phiên đăng nhập.
+2. Thêm vào `.env`:
+
+   ```env
+   BROWSER_CDP_URL=http://127.0.0.1:9222
+   ```
+
+3. Chạy `upload`/`queue`/`watch` như bình thường. Mỗi video, tool mở **một tab mới** trong Brave
+   đó, đăng xong thì đóng tab, còn Brave vẫn mở nguyên.
+
+> ⚠️ Khi cổng 9222 đang mở, mọi chương trình trên máy bạn đều điều khiển được cửa sổ Brave đó.
+> Chỉ dùng profile riêng này cho TikTok, và đóng Brave khi không cần chạy tool.
+
 ## 2. Cách dùng API chính thức (cần key)
 
 1. Vào https://developers.tiktok.com → **Manage apps** → tạo app.

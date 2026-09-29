@@ -16,6 +16,29 @@ const PRIVACY_LABEL = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+const BRAVE_PATHS = {
+  win32: [
+    `${process.env.PROGRAMFILES}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+    `${process.env['PROGRAMFILES(X86)']}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+    `${process.env.LOCALAPPDATA}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+  ],
+  darwin: ['/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'],
+  linux: ['/usr/bin/brave-browser', '/usr/bin/brave', '/snap/bin/brave', '/opt/brave.com/brave/brave'],
+}
+
+export function resolveExecutable() {
+  if (config.chromiumPath) return config.chromiumPath
+  if (config.browser !== 'brave') return undefined
+  const found = (BRAVE_PATHS[process.platform] || []).find((p) => fs.existsSync(p))
+  if (!found) throw new Error('Không tìm thấy Brave. Đặt CHROMIUM_PATH trỏ tới file chạy của Brave trong .env')
+  return found
+}
+
+/**
+ * Trả về { page, close }.
+ * - BROWSER_CDP_URL có giá trị → mở tab mới trong Brave/Chrome bạn đang mở sẵn
+ * - ngược lại → tự mở trình duyệt riêng với profile .browser-profile/
+ */
 async function launch({ headless = config.headless } = {}) {
   let chromium
   try {
@@ -23,12 +46,32 @@ async function launch({ headless = config.headless } = {}) {
   } catch {
     throw new Error('Chưa cài Playwright. Chạy: npm run setup')
   }
-  return chromium.launchPersistentContext(config.profileDir, {
+
+  if (config.cdpUrl) {
+    const browser = await chromium.connectOverCDP(config.cdpUrl).catch((err) => {
+      throw new Error(
+        `Không kết nối được trình duyệt tại ${config.cdpUrl}. Hãy mở Brave với --remote-debugging-port (xem README). (${err.message})`,
+      )
+    })
+    const page = await browser.contexts()[0].newPage()
+    return {
+      page,
+      // Chỉ đóng tab tool đã mở và ngắt kết nối, không đóng trình duyệt của bạn
+      close: async () => {
+        await page.close().catch(() => {})
+        await browser.close().catch(() => {})
+      },
+    }
+  }
+
+  const executablePath = resolveExecutable()
+  const ctx = await chromium.launchPersistentContext(config.profileDir, {
     headless,
     locale: 'en-US',
     viewport: { width: 1280, height: 900 },
-    ...(config.chromiumPath && { executablePath: config.chromiumPath }),
+    ...(executablePath && { executablePath }),
   })
+  return { page: ctx.pages()[0] || (await ctx.newPage()), close: () => ctx.close() }
 }
 
 async function waitUntil(fn, timeoutMs, message) {
@@ -42,15 +85,14 @@ async function waitUntil(fn, timeoutMs, message) {
 
 /** Mở trình duyệt để bạn tự đăng nhập TikTok; phiên đăng nhập được lưu trong .browser-profile/ */
 export async function browserLogin() {
-  const ctx = await launch({ headless: false })
-  const page = ctx.pages()[0] || (await ctx.newPage())
+  const { page, close } = await launch({ headless: false })
   await page.goto(LOGIN_URL)
   console.log('Hãy đăng nhập TikTok trong cửa sổ trình duyệt vừa mở (QR code, email, số điện thoại…).')
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   await rl.question('Đăng nhập xong thì nhấn Enter tại đây… ')
   rl.close()
-  await ctx.close()
-  console.log(`Đã lưu phiên đăng nhập vào ${config.profileDir}`)
+  await close()
+  if (!config.cdpUrl) console.log(`Đã lưu phiên đăng nhập vào ${config.profileDir}`)
 }
 
 async function typeCaption(page, caption) {
@@ -91,8 +133,7 @@ async function setPrivacy(page, privacy) {
 
 /** Đăng 1 video bằng cách điều khiển trang TikTok Studio. */
 export async function browserPublish({ file, caption = '', privacy = 'SELF_ONLY', uploadTimeoutMs = 10 * 60_000 }) {
-  const ctx = await launch()
-  const page = ctx.pages()[0] || (await ctx.newPage())
+  const { page, close } = await launch()
   try {
     await page.goto(UPLOAD_URL, { waitUntil: 'domcontentloaded' })
     const input = page.locator('input[type="file"]').first()
@@ -137,6 +178,6 @@ export async function browserPublish({ file, caption = '', privacy = 'SELF_ONLY'
     err.message += ` (ảnh chụp màn hình: ${shot})`
     throw err
   } finally {
-    await ctx.close()
+    await close()
   }
 }
