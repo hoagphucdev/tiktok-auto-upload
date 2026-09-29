@@ -31,7 +31,8 @@ export const config = {
   clientKey: env('TIKTOK_CLIENT_KEY', ''),
   clientSecret: env('TIKTOK_CLIENT_SECRET', ''),
   redirectUri: env('TIKTOK_REDIRECT_URI', 'http://localhost:3455/callback'),
-  usePkce: env('TIKTOK_USE_PKCE', '0') === '1',
+  // TikTok bắt buộc PKCE với app Desktop; app Web bỏ qua nên bật mặc định
+  usePkce: env('TIKTOK_USE_PKCE', '1') !== '0',
   scopes: env('TIKTOK_SCOPES', 'user.info.basic,user.info.profile,user.info.stats,video.list,video.publish,video.upload'),
   defaultPrivacy: env('DEFAULT_PRIVACY', 'SELF_ONLY'),
   defaultMode: env('DEFAULT_MODE', 'direct'),

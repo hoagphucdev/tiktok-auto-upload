@@ -159,7 +159,7 @@ lần đầu bạn vẫn chạy `node src/cli.mjs login` để đăng nhập Tik
 2. Bật các scope: `user.info.basic`, `user.info.profile`, `user.info.stats`, `video.list`,
    `video.publish`, `video.upload`.
 3. Khai báo **Redirect URI** khớp với `TIKTOK_REDIRECT_URI` trong `.env`. Với app loại **Desktop**,
-   dùng `http://localhost:3455/callback` và đặt `TIKTOK_USE_PKCE=1`. Với app loại **Web**, TikTok
+   dùng `http://localhost:3455/callback` và giữ `TIKTOK_USE_PKCE=1` (mặc định; nếu tắt sẽ bị lỗi "code_challenge"). Với app loại **Web**, TikTok
    bắt buộc URL https, tool sẽ hỏi bạn dán lại URL sau khi đăng nhập.
 4. App **chưa được audit**: thêm tài khoản TikTok của bạn vào *Sandbox / Target users*; video chỉ
    đăng được ở chế độ `SELF_ONLY` (riêng tư) cho tới khi app được duyệt.
