@@ -1,59 +1,31 @@
 import { config } from '../src/config.mjs'
-import { browserLoginAuto } from '../src/browser.mjs'
-import { fetchChannel } from '../src/channel.mjs'
+import { startLogin, tokenStatus } from '../src/auth.mjs'
 import { fetchChannelApi } from '../src/channel-api.mjs'
 import { publishVideo } from '../src/upload.mjs'
 
 export const SETTING_DEFAULTS = {
-  username: process.env.TIKTOK_USERNAME || '',
   maxVideos: 100,
-  method: config.method,
   privacy: config.defaultPrivacy,
-  browser: config.browser,
-  chromiumPath: config.chromiumPath,
-  cdpUrl: config.cdpUrl,
-  headless: config.headless,
   gapMinutes: 60,
   dailyLimit: 10,
   paused: false,
   hashtagSets: [],
-  lastLoginAt: null,
 }
 
-// Cài đặt trên web ghi đè cấu hình .env cho các lần mở trình duyệt sau
-function applySettings(s) {
-  Object.assign(config, {
-    method: s.method,
-    browser: s.browser,
-    chromiumPath: s.chromiumPath,
-    cdpUrl: s.cdpUrl,
-    headless: s.headless,
-  })
-}
-
-export function createPublisher(store, settings) {
+/** Mọi thao tác với TikTok đi qua API chính thức (Content Posting API + Display API). */
+export function createPublisher(store) {
   return {
     publish(video, s) {
-      applySettings(s)
       return publishVideo({
         file: store.filePath(video),
         caption: video.caption,
         privacy: video.privacy || s.privacy,
-        mode: 'direct',
+        mode: 'direct', // tự chuyển sang hộp nháp nếu token không có video.publish
       })
     },
-    login(s) {
-      applySettings(s)
-      if (s.method === 'api') {
-        throw Object.assign(new Error('Chế độ API: chạy "node src/cli.mjs login --api" trong terminal để đăng nhập OAuth'), { status: 400 })
-      }
-      return browserLoginAuto()
-    },
-    // Chế độ API: Display API chính thức (không captcha). Chế độ trình duyệt: đọc trang kênh.
-    fetchChannel(opts) {
-      const s = settings.get()
-      applySettings(s)
-      return s.method === 'api' ? fetchChannelApi(opts) : fetchChannel(opts)
-    },
+    // Trả link cấp quyền ngay; `done` xong khi callback (localhost hoặc Worker) trả mã và đã lưu token
+    startLogin: () => startLogin(),
+    authStatus: () => tokenStatus(),
+    fetchChannel: (opts) => fetchChannelApi(opts),
   }
 }

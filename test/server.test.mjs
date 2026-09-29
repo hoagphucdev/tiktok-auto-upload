@@ -49,19 +49,23 @@ test('logger: ghi .txt theo ngày, 1 dòng/mục, đọc lại được; lịch 
 async function startServer({ publish = async () => ({ status: 'PUBLISH_COMPLETE' }), fetchChannel } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tt-server-'))
   const store = createPendingStore(dir)
-  const settings = createSettingsStore(dir, { username: 'demo', privacy: 'SELF_ONLY', gapMinutes: 0, dailyLimit: 0, paused: false, hashtagSets: [] })
+  const settings = createSettingsStore(dir, { maxVideos: 100, privacy: 'SELF_ONLY', gapMinutes: 0, dailyLimit: 0, paused: false, hashtagSets: [] })
   const lock = { busy: null }
   let fetches = 0
   const channel = createChannelCache({
     fetchChannel: async (opts) => {
       fetches++
-      return fetchChannel ? fetchChannel(opts) : { user: { username: opts.username }, videos: [], fetchedAt: new Date().toISOString() }
+      return fetchChannel ? fetchChannel(opts) : { user: { username: 'demo', stats: {} }, videos: [], fetchedAt: new Date().toISOString() }
     },
-    lock,
     getSettings: settings.get,
   })
   const scheduler = createScheduler({ store, getSettings: settings.get, publish, lock, intervalMs: 60_000, history: () => noHistory })
-  const app = createApp({ store, settings, channel, scheduler, lock, publisher: { login: async () => {} } })
+  let resolveLogin
+  const publisher = {
+    authStatus: () => ({ loggedIn: false }),
+    startLogin: () => ({ url: 'https://www.tiktok.com/v2/auth/authorize/?x=1', done: new Promise((r) => (resolveLogin = r)) }),
+  }
+  const app = createApp({ store, settings, channel, scheduler, lock, publisher })
   const server = await new Promise((r) => {
     const s = app.listen(0, '127.0.0.1', () => r(s))
   })
@@ -74,7 +78,7 @@ async function startServer({ publish = async () => ({ status: 'PUBLISH_COMPLETE'
     const text = await res.text()
     return { status: res.status, body: text && res.headers.get('content-type')?.includes('json') ? JSON.parse(text) : text }
   }
-  return { dir, store, scheduler, call, fetches: () => fetches, close: () => server.close() }
+  return { dir, store, scheduler, call, fetches: () => fetches, finishLogin: (t) => resolveLogin(t), close: () => server.close() }
 }
 
 const uploadForm = (name = 'Video thử.mp4', fields = {}) => {
@@ -157,8 +161,8 @@ test('API: lên lịch hàng loạt, lỗi khi đăng giữ lại trong hàng ch
 
 test('API: dữ liệu kênh lấy từ TikTok, cache ngắn trong RAM, refresh bắt buộc lấy lại', async () => {
   const srv = await startServer({
-    fetchChannel: async ({ username }) => ({
-      user: { username, stats: { followers: 10 } },
+    fetchChannel: async ({ maxVideos }) => ({
+      user: { username: 'demo', stats: { followers: 10, videos: maxVideos } },
       videos: [{ id: '1', caption: 'x' }],
       fetchedAt: new Date().toISOString(),
     }),
@@ -182,13 +186,30 @@ test('API: dữ liệu kênh lấy từ TikTok, cache ngắn trong RAM, refresh 
 test('API: cài đặt được kiểm tra hợp lệ', async () => {
   const srv = await startServer()
   try {
-    const ok = await srv.call('PUT', '/settings', { username: '@my.channel', gapMinutes: '90', paused: 1, hashtagSets: [{ name: 'Robot', tags: '#robot' }, { name: '' }] })
-    assert.equal(ok.body.username, 'my.channel')
+    const ok = await srv.call('PUT', '/settings', { maxVideos: 9999, gapMinutes: '90', paused: 1, hashtagSets: [{ name: 'Robot', tags: '#robot' }, { name: '' }] })
+    assert.equal(ok.body.maxVideos, 500)
     assert.equal(ok.body.gapMinutes, 90)
     assert.equal(ok.body.paused, true)
     assert.equal(ok.body.hashtagSets.length, 1)
-    assert.equal((await srv.call('PUT', '/settings', { method: 'hack' })).status, 400)
-    assert.equal((await srv.call('PUT', '/settings', { username: 'bad name!' })).status, 400)
+    assert.equal((await srv.call('PUT', '/settings', { privacy: 'hack' })).status, 400)
+    // Khoá lạ bị bỏ qua, không lưu
+    assert.equal((await srv.call('PUT', '/settings', { method: 'browser' })).body.method, undefined)
+  } finally {
+    srv.close()
+  }
+})
+
+test('API: đăng nhập OAuth từ web trả link, ghi nhật ký khi xong', async () => {
+  const srv = await startServer()
+  try {
+    const start = await srv.call('POST', '/auth/login')
+    assert.match(start.body.url, /^https:\/\/www\.tiktok\.com\/v2\/auth\/authorize\//)
+    assert.equal((await srv.call('GET', '/auth/status')).body.pending, true)
+    srv.finishLogin({ scope: 'user.info.basic,video.upload' })
+    await new Promise((r) => setTimeout(r, 50))
+    assert.equal((await srv.call('GET', '/auth/status')).body.pending, false)
+    const log = (await srv.call('GET', `/logs/${localDay()}`)).body
+    assert.ok(log.some((e) => e.action === 'login' && e.level === 'success' && e.message.includes('video.upload')))
   } finally {
     srv.close()
   }

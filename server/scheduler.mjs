@@ -42,7 +42,7 @@ export function pickNext(videos, settings, history, now = Date.now()) {
 
 /**
  * Chạy nền trong server: cứ `intervalMs` kiểm tra 1 lần, mỗi lần đăng tối đa 1 video.
- * `lock` dùng chung với đăng nhập / lấy dữ liệu kênh để không mở 2 trình duyệt cùng profile.
+ * `lock` báo cho web app biết đang đăng bài nào, và để không đăng 2 video cùng lúc.
  */
 export function createScheduler({ store, getSettings, publish, lock, onPublished, intervalMs = 20_000, history = publishHistory }) {
   const state = { lastBlocked: null }

@@ -44,10 +44,10 @@ function saveTokens(tokens) {
 export async function getAccessToken() {
   requireCredentials()
   const tokens = loadTokens()
-  if (!tokens) throw new Error('Chưa đăng nhập. Chạy: node src/cli.mjs login')
+  if (!tokens) throw new Error('Chưa đăng nhập TikTok (web: Cài đặt → Đăng nhập TikTok; hoặc chạy: node src/cli.mjs login)')
   if (tokens.expires_at - 60_000 > Date.now()) return tokens.access_token
   if (tokens.refresh_expires_at <= Date.now()) {
-    throw new Error('Refresh token đã hết hạn. Chạy lại: node src/cli.mjs login')
+    throw new Error('Phiên đăng nhập TikTok đã hết hạn, hãy đăng nhập lại (Cài đặt → Đăng nhập TikTok)')
   }
   const fresh = await tokenRequest({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token })
   saveTokens(fresh)
@@ -125,7 +125,26 @@ async function promptForCode(redirect, state) {
   }
 }
 
-export async function login() {
+/** Trạng thái đăng nhập (không lộ token) cho web app / CLI. */
+export function tokenStatus() {
+  const t = loadTokens()
+  if (!t) return { loggedIn: false }
+  const scopes = String(t.scope || '').split(/[,\s]+/).filter(Boolean)
+  return {
+    loggedIn: t.refresh_expires_at > Date.now(),
+    openId: t.open_id,
+    scopes,
+    canDirectPost: scopes.includes('video.publish'),
+    expiresAt: new Date(t.expires_at).toISOString(),
+    refreshExpiresAt: new Date(t.refresh_expires_at).toISOString(),
+  }
+}
+
+/**
+ * Bắt đầu đăng nhập OAuth. Trả về ngay `url` (link cấp quyền) và `done` — promise xong khi đã
+ * nhận mã (server localhost, callback Worker, hoặc người dùng dán URL nếu `interactive`) và lưu token.
+ */
+export function startLogin({ interactive = false, timeoutMs = 10 * 60_000 } = {}) {
   requireCredentials()
   const state = crypto.randomBytes(16).toString('hex')
   const params = new URLSearchParams({
@@ -143,20 +162,45 @@ export async function login() {
     params.set('code_challenge_method', 'S256')
   }
 
-  console.log(`\nMở link sau trong trình duyệt để cấp quyền:\n\n${AUTHORIZE_URL}?${params}\n`)
-  console.log(`Redirect URI: ${config.redirectUri} · PKCE: ${config.usePkce ? 'bật' : 'tắt'} · Scope: ${config.scopes}`)
-  console.log('(Redirect URI phải khớp Y HỆT URI khai báo trong app TikTok)\n')
-
+  const url = `${AUTHORIZE_URL}?${params}`
   const redirect = new URL(config.redirectUri)
   const isLocal = ['localhost', '127.0.0.1'].includes(redirect.hostname)
-  const code = isLocal ? await waitForCallback(redirect, state) : await promptForCode(redirect, state)
 
-  const tokens = await tokenRequest({
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: config.redirectUri,
-    ...(verifier && { code_verifier: verifier }),
-  })
-  saveTokens(tokens)
+  async function waitForCode() {
+    if (isLocal) return waitForCallback(redirect, state)
+    if (interactive) return promptForCode(redirect, state)
+    const ac = new AbortController()
+    const timer = setTimeout(() => ac.abort(), timeoutMs)
+    try {
+      return await Promise.race([
+        pollWorker(redirect, state, ac.signal),
+        new Promise((_, reject) => ac.signal.addEventListener('abort', () => reject(new Error('Hết thời gian chờ đăng nhập TikTok')))),
+      ])
+    } finally {
+      clearTimeout(timer)
+      ac.abort()
+    }
+  }
+
+  const done = (async () => {
+    const code = await waitForCode()
+    const tokens = await tokenRequest({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: config.redirectUri,
+      ...(verifier && { code_verifier: verifier }),
+    })
+    saveTokens(tokens)
+    return tokens
+  })()
+  return { url, done }
+}
+
+export async function login() {
+  const { url, done } = startLogin({ interactive: true })
+  console.log(`\nMở link sau trong trình duyệt để cấp quyền:\n\n${url}\n`)
+  console.log(`Redirect URI: ${config.redirectUri} · PKCE: ${config.usePkce ? 'bật' : 'tắt'} · Scope: ${config.scopes}`)
+  console.log('(Redirect URI phải khớp Y HỆT URI khai báo trong app TikTok)\n')
+  const tokens = await done
   console.log(`Đăng nhập OK (open_id: ${tokens.open_id}, scope: ${tokens.scope}).`)
 }

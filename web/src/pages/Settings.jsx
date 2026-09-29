@@ -25,64 +25,65 @@ export default function Settings() {
     setForm(saved)
   }
 
-  const loggingIn = stats?.busy?.kind === 'login'
+  const auth = stats?.auth
+
+  // Mở tab trước (tránh bị chặn popup), rồi trỏ tới link cấp quyền server trả về
+  async function login() {
+    const tab = window.open('about:blank', '_blank')
+    try {
+      const { url } = await run(api.login, 'Đã mở trang cấp quyền TikTok ở tab mới')
+      if (tab) tab.location.href = url
+      else window.location.href = url
+    } catch {
+      tab?.close()
+    }
+  }
 
   return (
     <>
-      <PageHeader title="Cài đặt" subtitle="Cách đăng, trình duyệt, nhịp đăng bài và bộ hashtag" />
+      <PageHeader title="Cài đặt" subtitle="Tài khoản TikTok, nhịp đăng bài và bộ hashtag" />
 
       <form className="settings" onSubmit={save}>
         <section className="card">
-          <h2>Kênh TikTok</h2>
-          <div className="grid-2">
-            <label>
-              Tên kênh (@username)
-              <input value={form.username} onChange={set('username')} placeholder="@ten_kenh" required={form.method !== 'api'} />
-              <span className="muted small">
-                {form.method === 'api'
-                  ? 'Chế độ API: dữ liệu lấy qua API chính thức theo tài khoản đã đăng nhập, không cần điền.'
-                  : 'Thông tin kênh và video được lấy trực tiếp từ trang này trên TikTok.'}
-              </span>
-            </label>
-            <label>
-              Số video tối đa lấy về mỗi lần
-              <input type="number" min="1" max="500" value={form.maxVideos} onChange={set('maxVideos', Number)} />
-              <span className="muted small">Càng nhiều càng lâu (TikTok tải khoảng 30 video mỗi lần cuộn).</span>
-            </label>
-          </div>
-
-          <h3>Đăng nhập</h3>
-          {form.method === 'browser' ? (
+          <h2>Tài khoản TikTok</h2>
+          {auth?.loggedIn ? (
             <>
-              <p className="muted">
-                Bấm nút dưới, một cửa sổ trình duyệt sẽ mở ra trên máy chạy server. Bạn đăng nhập TikTok trong đó; tool tự nhận biết
-                khi đăng nhập xong và đóng cửa sổ.
+              <p>
+                Đã đăng nhập <span className="muted">(open_id {auth.openId})</span>. Token tự làm mới, hết hạn hẳn vào{' '}
+                <b>{fmtDateTime(auth.refreshExpiresAt)}</b>.
               </p>
-              <div className="actions">
-                <button type="button" className="primary" disabled={loggingIn} onClick={() => run(api.login, 'Đã mở trình duyệt, hãy đăng nhập TikTok')}>
-                  {loggingIn ? 'Đang chờ bạn đăng nhập…' : 'Đăng nhập TikTok'}
-                </button>
-                <span className="muted">Lần đăng nhập gần nhất: {fmtDateTime(form.lastLoginAt)}</span>
+              <div className="chips">
+                {auth.scopes.map((sc) => (
+                  <span key={sc} className="chip">
+                    {sc}
+                  </span>
+                ))}
               </div>
+              {!auth.canDirectPost && (
+                <div className="callout">
+                  Token chưa có quyền <code>video.publish</code> (Direct Post) nên video sẽ được <b>gửi vào hộp nháp</b> trong app
+                  TikTok — bạn mở app, soạn caption và bấm Đăng. Bật Direct Post cho app trên developers.tiktok.com rồi đăng nhập lại để
+                  đăng thẳng.
+                </div>
+              )}
             </>
           ) : (
-            <p className="muted">
-              Chế độ API: đăng nhập OAuth bằng lệnh <code>node src/cli.mjs login --api</code> trong terminal (cần client key trong{' '}
-              <code>.env</code>).
-            </p>
+            <p className="muted">Chưa đăng nhập. Cần client key/secret và Redirect URI trong file <code>.env</code> của server.</p>
           )}
+          <div className="actions">
+            <button type="button" className={auth?.loggedIn ? '' : 'primary'} onClick={login} disabled={auth?.pending}>
+              {auth?.pending ? 'Đang chờ bạn cấp quyền…' : auth?.loggedIn ? 'Đăng nhập lại / cấp thêm quyền' : 'Đăng nhập TikTok'}
+            </button>
+          </div>
+          <p className="muted small">
+            Trang cấp quyền của TikTok mở ở tab mới; sau khi bấm cho phép, callback (Worker hoặc localhost) trả mã về và server tự lưu
+            token.
+          </p>
         </section>
 
         <section className="card">
-          <h2>Cách đăng</h2>
+          <h2>Đăng bài & dữ liệu kênh</h2>
           <div className="grid-2">
-            <label>
-              Phương thức
-              <select value={form.method} onChange={set('method')}>
-                <option value="browser">Trình duyệt (không cần key)</option>
-                <option value="api">Content Posting API (cần key)</option>
-              </select>
-            </label>
             <label>
               Quyền xem mặc định cho video mới
               <select value={form.privacy} onChange={set('privacy')}>
@@ -92,38 +93,14 @@ export default function Settings() {
                   </option>
                 ))}
               </select>
+              <span className="muted small">App chưa được TikTok duyệt chỉ đăng được ở chế độ "Chỉ mình tôi".</span>
+            </label>
+            <label>
+              Số video tối đa lấy về mỗi lần
+              <input type="number" min="1" max="500" value={form.maxVideos} onChange={set('maxVideos', Number)} />
+              <span className="muted small">Display API trả 20 video mỗi lần gọi.</span>
             </label>
           </div>
-
-          {form.method === 'browser' && (
-            <>
-              <div className="grid-2">
-                <label>
-                  Trình duyệt tool tự mở
-                  <select value={form.browser} onChange={set('browser')}>
-                    <option value="chromium">Chromium (do Playwright cài)</option>
-                    <option value="brave">Brave</option>
-                  </select>
-                </label>
-                <label>
-                  Đường dẫn trình duyệt (tuỳ chọn)
-                  <input value={form.chromiumPath} onChange={set('chromiumPath')} placeholder="C:\Program Files\BraveSoftware\...\brave.exe" />
-                </label>
-              </div>
-              <label>
-                Mở tab trong trình duyệt đang chạy (CDP URL, tuỳ chọn)
-                <input value={form.cdpUrl} onChange={set('cdpUrl')} placeholder="http://127.0.0.1:9222" />
-                <span className="muted small">
-                  Điền nếu bạn mở Brave với <code>--remote-debugging-port=9222</code>; tool sẽ mở tab mới trong cửa sổ đó thay vì mở trình
-                  duyệt riêng. Để trống để tool tự mở trình duyệt.
-                </span>
-              </label>
-              <label className="check">
-                <input type="checkbox" checked={form.headless} onChange={set('headless')} />
-                Chạy ẩn trình duyệt (không khuyến nghị — TikTok hay chặn)
-              </label>
-            </>
-          )}
         </section>
 
         <section className="card">

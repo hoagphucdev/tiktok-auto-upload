@@ -2,7 +2,7 @@
   "name": "tiktok-auto-upload",
   "private": true,
   "version": "0.1.0",
-  "description": "Tự động đăng & quản lý nội dung kênh TikTok (web app + CLI)",
+  "description": "Tự động đăng & quản lý nội dung kênh TikTok qua API chính thức (web app + CLI)",
   "type": "module",
   "bin": {
     "tiktok-auto-upload": "src/cli.mjs"
@@ -11,7 +11,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "setup": "npm install && npx playwright install chromium && npm run build",
+    "setup": "npm install && npm run build",
     "build": "vite build",
     "start": "node server/index.mjs",
     "dev:server": "node --watch server/index.mjs",
@@ -26,7 +26,6 @@
   "dependencies": {
     "express": "^5.2.1",
     "multer": "^2.4.0",
-    "playwright": "^1.63.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

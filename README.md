@@ -1,58 +1,75 @@
 # TikTok Auto Upload
 
-Tự động đăng và quản lý nội dung kênh TikTok. Gồm:
+Tự động đăng và quản lý nội dung kênh TikTok qua **API chính thức của TikTok** (không điều khiển
+trình duyệt, không captcha):
 
-- **Web app quản lý** (`npm start`): thư viện video, soạn caption, lên lịch, lịch tuần, nhật ký,
-  tự động đăng theo nhịp bạn đặt.
-- **CLI** (`node src/cli.mjs …`): đăng nhanh từ terminal hoặc chạy bằng cron.
+- **Content Posting API**: đăng video (đăng thẳng với `video.publish`, hoặc gửi vào hộp nháp với `video.upload`).
+- **Display API**: thông tin kênh và danh sách video (`user.info.*`, `video.list`).
+- **Login Kit** (OAuth): đăng nhập, token tự làm mới.
 
-Có 2 cách đăng lên TikTok:
+Gồm **web app quản lý** (`npm start`), **CLI** (`node src/cli.mjs …`) và **callback Worker** trên
+Cloudflare ([`callback-worker/`](callback-worker/README.md)) cho Redirect URI và webhook.
 
-| Cách | Cần key? | Ưu điểm | Nhược điểm |
-|---|---|---|---|
-| **browser** (mặc định) | Không | Cài là chạy, đăng công khai được ngay | Phụ thuộc giao diện TikTok Studio, TikTok đổi giao diện thì có thể phải sửa selector |
-| **api** | Có | Ổn định, chính thức | Phải tạo app; app chưa audit chỉ đăng được video riêng tư |
+## 1. Chuẩn bị app TikTok
 
-## Web app quản lý kênh
+Trên developers.tiktok.com → app của bạn:
+
+1. Products: **Login Kit**, **Display API**, **Content Posting API** (bật **Direct Post** nếu có —
+   để có scope `video.publish` đăng thẳng).
+2. Scopes: `user.info.basic`, `user.info.profile`, `user.info.stats`, `video.list`, `video.upload`
+   (+ `video.publish` nếu bật được Direct Post).
+3. Deploy [`callback-worker/`](callback-worker/README.md) lên Cloudflare, rồi khai báo:
+   - **Login Kit → Redirect URI (Web)**: `https://tiktok-callback.<tên>.workers.dev/callback`
+   - **Webhooks → Callback URL**: `https://tiktok-callback.<tên>.workers.dev/webhook`
+4. App chưa được duyệt: thêm tài khoản TikTok của bạn vào *Sandbox / Target users*; video chỉ đăng
+   được ở chế độ `SELF_ONLY`. Nếu dùng client key Sandbox, cấu hình ở phần Sandbox.
+
+## 2. Cài đặt & đăng nhập
 
 ```bash
 git clone https://github.com/hoagphucdev/tiktok-auto-upload
 cd tiktok-auto-upload
-npm run setup      # cài thư viện + Chromium + build giao diện
-npm start          # mở http://127.0.0.1:8787
+cp .env.example .env     # điền TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, TIKTOK_REDIRECT_URI, TIKTOK_SCOPES
+npm run setup            # cài thư viện + build giao diện
+npm start                # mở http://127.0.0.1:8787
 ```
 
-Lần đầu vào **Cài đặt**:
+Vào **Cài đặt → Đăng nhập TikTok**: trang cấp quyền mở ở tab mới, bấm cho phép; callback Worker
+trả mã về và server tự lưu token (`.tokens.json`). Hoặc từ terminal: `node src/cli.mjs login`
+rồi `node src/cli.mjs whoami` để kiểm tra.
 
-1. Điền **tên kênh** (`@username`).
-2. Bấm **Đăng nhập TikTok**: một cửa sổ trình duyệt mở ra, bạn đăng nhập, tool tự nhận biết và đóng
-   cửa sổ. (Hoặc điền CDP URL để dùng tab Brave đang mở sẵn, xem phần Brave bên dưới.)
+Lỗi thường gặp khi đăng nhập:
+
+| TikTok báo | Sửa |
+|---|---|
+| `code_challenge` | Đặt `TIKTOK_USE_PKCE=1` |
+| `redirect_uri` | `TIKTOK_REDIRECT_URI` phải khớp y hệt URI trong Login Kit (tab Web cần `https`) |
+| `scope` | `TIKTOK_SCOPES` chỉ được chứa scope đã bật cho app |
+
+Token tự làm mới (access token 24 giờ, refresh token 1 năm). Muốn cấp thêm quyền thì đăng nhập lại.
+
+## Web app quản lý kênh
 
 ### Dữ liệu lấy từ đâu
 
 | Dữ liệu | Nguồn | Lưu trên máy? |
 |---|---|---|
-| Thông tin kênh (tên, avatar, bio, người theo dõi, lượt thích, số video) | Lấy trực tiếp từ trang kênh trên TikTok | **Không** — chỉ giữ tạm 5 phút trong RAM để chuyển trang cho nhanh |
-| Video đã đăng (caption, hashtag, ngày đăng, thời lượng, ảnh bìa, xem/thích/bình luận/chia sẻ/lưu, ghim, riêng tư, âm thanh, link) | Lấy trực tiếp từ TikTok | **Không** |
-| Video chưa đăng (hàng chờ) | Bạn tải lên | Có: `data/pending/` (file video + file .json cùng tên). Đăng xong thì tự xoá |
+| Thông tin kênh (tên, avatar, bio, người theo dõi, lượt thích, số video) | Display API | **Không** — chỉ giữ tạm 5 phút trong RAM |
+| Video đã đăng (caption, hashtag, ngày đăng, thời lượng, ảnh bìa, xem/thích/bình luận/chia sẻ, link) | Display API (`video.list`, chỉ video công khai) | **Không** |
+| Video chưa đăng (hàng chờ) | Bạn tải lên | Có: `data/pending/` (file video + file .json). Đăng xong thì tự xoá |
 | Cài đặt | Bạn nhập | `data/settings.json` |
 | Nhật ký thao tác | Tool ghi | `data/logs/YYYY-MM-DD.txt`, mỗi ngày 1 file |
-
-Tool đọc dữ liệu bằng trình duyệt đã đăng nhập: mở trang `tiktok.com/@kênh`, đọc thông tin hồ sơ
-và danh sách video mà chính trang TikTok tải về khi cuộn (xem kênh của mình nên thấy cả video riêng
-tư). Mỗi lần lấy mất khoảng 10–60 giây; bấm **Làm mới từ TikTok** để lấy số liệu mới nhất. Nếu
-TikTok hiện captcha, mở trình duyệt của tool (tắt chạy ẩn) và giải captcha rồi thử lại.
 
 ### Các trang
 
 | Trang | Làm được gì |
 |---|---|
-| **Tổng quan** | Thông tin kênh, tổng/trung bình lượt xem, thích, bình luận, tỉ lệ tương tác, top video xem nhiều nhất, tình trạng hàng chờ, nhật ký hôm nay |
-| **Video trên kênh** | Bảng hoặc lưới toàn bộ video trên TikTok, tìm kiếm, lọc công khai/riêng tư, sắp xếp theo xem/thích/bình luận/chia sẻ/lưu/tương tác. Bấm 1 video để xem bằng **player TikTok nhúng (iframe)** kèm đầy đủ thông tin và link mở trên TikTok (video riêng tư thì chỉ có link) |
-| **Hàng chờ đăng** | Kéo thả nhiều video để tải lên, soạn caption, chèn bộ hashtag, chọn ai được xem, hẹn giờ, lên lịch hàng loạt, Đăng ngay / Thử lại |
+| **Tổng quan** | Thông tin kênh, tổng/trung bình lượt xem, thích, bình luận, tỉ lệ tương tác, top video, tình trạng hàng chờ, nhật ký hôm nay |
+| **Video trên kênh** | Bảng hoặc lưới video, tìm kiếm, sắp xếp theo xem/thích/bình luận/chia sẻ/tương tác. Bấm 1 video để xem bằng **player TikTok nhúng (iframe)** kèm đầy đủ thông tin và link |
+| **Hàng chờ đăng** | Kéo thả nhiều video, soạn caption, chèn bộ hashtag, chọn ai được xem, hẹn giờ, lên lịch hàng loạt, Đăng ngay / Thử lại |
 | **Lịch đăng** | Theo tuần: video đã đăng (từ TikTok) và video đã lên lịch (từ hàng chờ) |
 | **Nhật ký** | Xem nhật ký theo ngày, lọc theo mức và nguồn, **tải file .txt** |
-| **Cài đặt** | Tên kênh, số video lấy mỗi lần, đăng nhập TikTok, cách đăng, trình duyệt (Chromium/Brave/CDP), khoảng cách giữa 2 bài, số bài tối đa/ngày, bộ hashtag |
+| **Cài đặt** | Đăng nhập TikTok và xem quyền đang có, quyền xem mặc định, số video lấy mỗi lần, khoảng cách giữa 2 bài, số bài tối đa/ngày, bộ hashtag |
 
 ### Nhật ký thao tác
 
@@ -62,7 +79,7 @@ Mọi thao tác được ghi vào `data/logs/YYYY-MM-DD.txt` (1 file mỗi ngày
 2026-09-29 13:26:42 | INFO    | web:127.0.0.1 | upload     | Tải lên "Kaiju đại chiến" (0.1 MB) vào hàng chờ | pending=bb27…
 2026-09-29 13:26:43 | INFO    | web:127.0.0.1 | edit       | Sửa "Gipsy Danger ra khơi": caption, quyền xem → Mọi người | pending=372d…
 2026-09-29 13:26:47 | SUCCESS | scheduler | publish    | Đã đăng "Gipsy Danger ra khơi" lên TikTok (quyền xem: PUBLIC_TO_EVERYONE) | …
-2026-09-29 13:28:22 | SUCCESS | system    | fetch      | Lấy dữ liệu kênh @gipsy.danger từ TikTok: 128400 người theo dõi, 8/8 video |
+2026-09-29 13:28:22 | SUCCESS | system    | fetch      | Lấy dữ liệu kênh @gipsy.danger từ TikTok API: 128400 người theo dõi, 8/8 video |
 ```
 
 Cột: thời gian · mức (INFO/SUCCESS/WARN/ERROR) · nguồn (`web:<IP>` = người dùng trên web,
@@ -74,8 +91,9 @@ ghi vào cùng file.
 - Server kiểm tra mỗi 20 giây, mỗi lần đăng **tối đa 1** video đã tới giờ hẹn.
 - Tôn trọng **khoảng cách tối thiểu** giữa 2 bài và **số bài tối đa mỗi ngày** (đếm từ nhật ký).
   Nút **Đăng ngay** bỏ qua hai giới hạn này.
-- Đăng lỗi → video ở lại hàng chờ với trạng thái **Lỗi** kèm lý do (và ảnh chụp màn hình trong
-  `errors/`); bấm **Thử lại** khi đã xử lý. Nếu TikTok báo giới hạn tần suất, video tự lùi lịch 15 phút.
+- Đăng lỗi → video ở lại hàng chờ với trạng thái **Lỗi** kèm lý do; bấm **Thử lại** khi đã xử lý.
+  Nếu TikTok báo giới hạn tần suất, video tự lùi lịch 15 phút.
+- Không có `video.publish` → video được **gửi vào hộp nháp** TikTok; mở app để soạn caption và đăng.
 - **Server phải đang chạy** thì mới tự đăng được.
 
 Truy cập từ điện thoại cùng mạng Wi-Fi: đặt `HOST=0.0.0.0` và `ADMIN_PASSWORD=...` trong `.env`, rồi
@@ -86,114 +104,22 @@ mở http://localhost:5173.
 
 # CLI
 
-## 1. Cách không cần key (trình duyệt)
-
-Tool mở Chromium bằng Playwright và thao tác trên trang upload của TikTok Studio thay bạn, giống
-như bạn tự bấm tay. Bạn đăng nhập **một lần**, phiên đăng nhập được lưu trong `.browser-profile/`.
-
 ```bash
-git clone https://github.com/hoagphucdev/tiktok-auto-upload
-cd tiktok-auto-upload
-npm run setup                     # cài Playwright + Chromium
-node src/cli.mjs login            # cửa sổ trình duyệt mở ra → đăng nhập TikTok → nhấn Enter ở terminal
-node src/cli.mjs upload ./video.mp4 -c "Gipsy Danger #robot #fyp" -p PUBLIC_TO_EVERYONE
+node src/cli.mjs login     # đăng nhập OAuth
+node src/cli.mjs whoami    # thông tin kênh, 5 video gần nhất, quyền đăng
 ```
 
-- Nên chạy có hiện cửa sổ (`HEADLESS=0`, mặc định), vì TikTok hay chặn trình duyệt chạy ẩn.
-  Nếu gặp captcha, bạn cứ tự giải trong cửa sổ đó.
-- Nếu lỗi, tool chụp màn hình vào `errors/` để xem nó đang kẹt ở bước nào.
-- Nếu phiên đăng nhập hết hạn, chạy lại `node src/cli.mjs login`.
-- Các option `--draft`, `--no-comment`, `--no-duet`, `--no-stitch`, `--cover-ms` chỉ dùng được ở
-  chế độ API.
-- ⚠️ Tự động hoá qua trình duyệt không phải cách TikTok chính thức hỗ trợ. Hãy đăng với tần suất
-  vừa phải (vài video mỗi ngày) để tránh tài khoản bị hạn chế.
-
-### Dùng Brave
-
-**Cách A: tool tự mở Brave.** Thêm vào `.env`:
-
-```env
-TIKTOK_BROWSER=brave
-```
-
-Tool tự tìm Brave ở chỗ cài mặc định trên Windows, macOS và Linux. Nếu không thấy, đặt
-`CHROMIUM_PATH` trỏ tới `brave.exe`. Brave sẽ mở bằng profile riêng `.browser-profile/`, nên
-lần đầu bạn vẫn chạy `node src/cli.mjs login` để đăng nhập TikTok.
-
-**Cách B: mở tab trong cửa sổ Brave bạn đang dùng.**
-
-1. Mở Brave kèm cổng điều khiển. Brave (giống Chrome bản mới) chỉ cho bật cổng này khi dùng một
-   thư mục profile **riêng**, không phải profile mặc định:
-
-   ```bat
-   :: Windows
-   "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" --remote-debugging-port=9222 --user-data-dir="%LOCALAPPDATA%\BraveTikTok"
-   ```
-
-   ```bash
-   # macOS
-   "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" --remote-debugging-port=9222 --user-data-dir="$HOME/.brave-tiktok"
-   # Linux
-   brave-browser --remote-debugging-port=9222 --user-data-dir="$HOME/.brave-tiktok"
-   ```
-
-   Nên tạo shortcut cho lệnh này. Lần đầu, đăng nhập TikTok trong cửa sổ Brave đó; các lần sau
-   Brave nhớ phiên đăng nhập.
-2. Thêm vào `.env`:
-
-   ```env
-   BROWSER_CDP_URL=http://127.0.0.1:9222
-   ```
-
-3. Chạy `upload`/`queue`/`watch` như bình thường. Mỗi video, tool mở **một tab mới** trong Brave
-   đó, đăng xong thì đóng tab, còn Brave vẫn mở nguyên.
-
-> ⚠️ Khi cổng 9222 đang mở, mọi chương trình trên máy bạn đều điều khiển được cửa sổ Brave đó.
-> Chỉ dùng profile riêng này cho TikTok, và đóng Brave khi không cần chạy tool.
-
-## 2. Cách dùng API chính thức (cần key) — không bị captcha
-
-**Trên developers.tiktok.com (app của bạn):**
-
-1. Thêm product **Login Kit**, **Display API** và **Content Posting API** (bật *Direct Post*).
-2. Bật các scope: `user.info.basic`, `user.info.profile`, `user.info.stats`, `video.list`,
-   `video.publish`, `video.upload`.
-3. Khai báo **Redirect URI** khớp với `TIKTOK_REDIRECT_URI` trong `.env`. Cách gọn nhất: deploy
-   [`callback-worker/`](callback-worker/README.md) lên Cloudflare (có sẵn `/callback` và `/webhook`),
-   CLI sẽ tự nhận mã đăng nhập. Với app loại **Desktop**,
-   dùng `http://localhost:3455/callback` và giữ `TIKTOK_USE_PKCE=1` (mặc định; nếu tắt sẽ bị lỗi "code_challenge"). Với app loại **Web**, TikTok
-   bắt buộc URL https, tool sẽ hỏi bạn dán lại URL sau khi đăng nhập.
-4. App **chưa được audit**: thêm tài khoản TikTok của bạn vào *Sandbox / Target users*; video chỉ
-   đăng được ở chế độ `SELF_ONLY` (riêng tư) cho tới khi app được duyệt.
-
-**Trên máy:**
-
-```bash
-# .env: UPLOAD_METHOD=api, TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, TIKTOK_REDIRECT_URI (+ TIKTOK_USE_PKCE)
-node src/cli.mjs login --api   # mở link in ra → cấp quyền → token lưu vào .tokens.json
-node src/cli.mjs whoami        # in thông tin kênh, 5 video gần nhất và quyền đăng bài
-```
-
-Trong web app: **Cài đặt → Phương thức → Content Posting API**, bấm Lưu. Từ đó thông tin kênh và
-danh sách video lấy qua **Display API** (nhanh, không mở trình duyệt, không captcha), và đăng bài
-qua Content Posting API.
-
-Giới hạn của Display API: chỉ trả **video công khai**, không có số lượt **lưu**, trạng thái ghim
-và nhạc nền. Nếu thiếu scope, tool báo rõ scope nào cần thêm.
-
-Token tự refresh (access token sống 24h, refresh token sống 365 ngày). Muốn cấp thêm scope thì
-chạy lại `login --api`.
-
-## 3. Đăng 1 video
+## Đăng 1 video
 
 ```bash
 node src/cli.mjs upload ./video.mp4 -c "Gipsy Danger #robot #fyp" -p SELF_ONLY
-node src/cli.mjs upload ./video.mp4 --api --draft    # (API) gửi vào nháp, tự bấm đăng trong app TikTok
+node src/cli.mjs upload ./video.mp4 --draft          # gửi vào hộp nháp, tự bấm Đăng trong app TikTok
 ```
 
 Mặc định là `SELF_ONLY` (chỉ mình bạn xem); đổi bằng `-p` hoặc `DEFAULT_PRIVACY` trong `.env`.
+Nếu token không có `video.publish`, tool tự gửi vào hộp nháp (caption và quyền xem soạn trong app).
 
-## 4. Tự động hoá bằng thư mục queue
+## Tự động hoá bằng thư mục queue
 
 Thả video vào `queue/`. Nếu cần, thêm file cùng tên để khai báo caption hoặc tuỳ chọn:
 
@@ -237,7 +163,7 @@ Muốn chạy định kỳ bằng cron thay cho `watch`:
 0 */3 * * * cd /path/to/tiktok-auto-upload && node src/cli.mjs queue --max 1 >> cron.log 2>&1
 ```
 
-## Giới hạn của TikTok (chế độ API)
+## Giới hạn của TikTok
 
 - Định dạng MP4, MOV hoặc WebM (khuyến nghị MP4/H.264), dung lượng tối đa 4GB, caption tối đa
   2200 ký tự.

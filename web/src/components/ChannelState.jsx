@@ -7,11 +7,11 @@ export default function ChannelState() {
   const { data, error, loading, reload } = channel
 
   if (!stats) return null
-  if (!stats.username && stats.method !== 'api') {
+  if (!stats.auth?.loggedIn) {
     return (
       <div className="callout">
-        Chưa đặt tên kênh TikTok. Vào <a href="#/settings">Cài đặt</a>, điền <b>@username</b> của kênh để tool lấy thông tin và video trực
-        tiếp từ TikTok.
+        Chưa đăng nhập TikTok. Vào <a href="#/settings">Cài đặt</a> và bấm <b>Đăng nhập TikTok</b> để tool lấy thông tin kênh và video qua
+        API chính thức.
       </div>
     )
   }
@@ -19,11 +19,10 @@ export default function ChannelState() {
   return (
     <div className={`fetch-bar ${error ? 'error' : ''}`}>
       <span>
-        {loading && !data && (stats.method === 'api' ? 'Đang lấy dữ liệu từ TikTok API…' : 'Đang lấy dữ liệu từ TikTok… (mở trình duyệt, có thể mất 10–60 giây)')}
+        {loading && !data && 'Đang lấy dữ liệu từ TikTok API…'}
         {data && (
           <>
-            Dữ liệu lấy trực tiếp từ TikTok{data.source === 'api' ? ' (API chính thức)' : ''} lúc <b>{fmtDateTime(data.fetchedAt)}</b>
-            {data.stale && ' (bản cũ — trình duyệt đang bận)'}
+            Dữ liệu lấy trực tiếp từ TikTok API lúc <b>{fmtDateTime(data.fetchedAt)}</b>
             {!data.complete && ` · mới lấy ${data.videos.length}${data.user.stats.videos != null ? `/${data.user.stats.videos}` : ''} video (tăng giới hạn trong Cài đặt)`}
           </>
         )}

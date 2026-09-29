@@ -15,8 +15,8 @@ const DATA_DIR = path.resolve(ROOT, process.env.DATA_DIR || 'data')
 const store = createPendingStore(DATA_DIR)
 const settings = createSettingsStore(DATA_DIR, SETTING_DEFAULTS)
 const lock = { busy: null }
-const publisher = createPublisher(store, settings)
-const channel = createChannelCache({ fetchChannel: publisher.fetchChannel, lock, getSettings: settings.get })
+const publisher = createPublisher(store)
+const channel = createChannelCache({ fetchChannel: publisher.fetchChannel, getSettings: settings.get })
 const scheduler = createScheduler({
   store,
   getSettings: settings.get,

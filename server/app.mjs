@@ -9,20 +9,7 @@ import { PRIVACY_LEVELS, STATUSES } from './store.mjs'
 const VIDEO_EXTS = ['.mp4', '.mov', '.webm']
 const MAX_CAPTION = 2200
 const EDITABLE = ['title', 'caption', 'privacy', 'tags', 'notes', 'scheduledAt', 'status']
-const SETTINGS_KEYS = [
-  'username',
-  'maxVideos',
-  'method',
-  'privacy',
-  'browser',
-  'chromiumPath',
-  'cdpUrl',
-  'headless',
-  'gapMinutes',
-  'dailyLimit',
-  'paused',
-  'hashtagSets',
-]
+const SETTINGS_KEYS = ['maxVideos', 'privacy', 'gapMinutes', 'dailyLimit', 'paused', 'hashtagSets']
 const PRIVACY_TEXT = {
   PUBLIC_TO_EVERYONE: 'Mọi người',
   FOLLOWER_OF_CREATOR: 'Người theo dõi',
@@ -118,7 +105,7 @@ export function createApp({ store, settings, channel, scheduler, publisher, lock
   // ---------- Kênh TikTok (luôn lấy từ TikTok) ----------
   api.get('/channel', async (req, res) => {
     const refresh = req.query.refresh === '1'
-    if (refresh) audit(req, 'refresh', `Yêu cầu làm mới dữ liệu kênh @${settings.get().username} từ TikTok`)
+    if (refresh) audit(req, 'refresh', 'Yêu cầu làm mới dữ liệu kênh từ TikTok')
     res.json(await channel.get({ refresh }))
   })
 
@@ -247,9 +234,7 @@ export function createApp({ store, settings, channel, scheduler, publisher, lock
       publishedToday: todayLog.filter((e) => e.action === 'publish' && e.level === 'success').length,
       dailyLimit: s.dailyLimit,
       paused: s.paused,
-      username: s.username,
-      method: s.method,
-      lastLoginAt: s.lastLoginAt,
+      auth: { ...publisher.authStatus(), pending: Boolean(pendingLogin) },
       upcoming: videos
         .filter((v) => v.status === 'scheduled')
         .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
@@ -283,10 +268,6 @@ export function createApp({ store, settings, channel, scheduler, publisher, lock
   api.put('/settings', (req, res) => {
     const patch = {}
     for (const key of SETTINGS_KEYS) if (key in req.body) patch[key] = req.body[key]
-    if ('username' in patch) patch.username = String(patch.username ?? '').replace(/^@/, '').trim()
-    if ('username' in patch && patch.username && !/^[\w.]{2,24}$/.test(patch.username)) throw httpError(400, 'Tên kênh không hợp lệ')
-    if ('method' in patch && !['browser', 'api'].includes(patch.method)) throw httpError(400, 'Cách đăng không hợp lệ')
-    if ('browser' in patch && !['chromium', 'brave'].includes(patch.browser)) throw httpError(400, 'Trình duyệt không hợp lệ')
     if ('privacy' in patch && !PRIVACY_LEVELS.includes(patch.privacy)) throw httpError(400, 'Chế độ riêng tư không hợp lệ')
     for (const key of ['gapMinutes', 'dailyLimit', 'maxVideos']) {
       if (key in patch) {
@@ -295,7 +276,7 @@ export function createApp({ store, settings, channel, scheduler, publisher, lock
       }
     }
     if ('maxVideos' in patch) patch.maxVideos = Math.min(Math.max(patch.maxVideos, 1), 500)
-    for (const key of ['headless', 'paused']) if (key in patch) patch[key] = Boolean(patch[key])
+    if ('paused' in patch) patch.paused = Boolean(patch.paused)
     if ('hashtagSets' in patch) {
       if (!Array.isArray(patch.hashtagSets)) throw httpError(400, 'hashtagSets phải là mảng')
       patch.hashtagSets = patch.hashtagSets
@@ -311,32 +292,30 @@ export function createApp({ store, settings, channel, scheduler, publisher, lock
     }
     const others = changed.filter((k) => k !== 'paused')
     if (others.length) audit(req, 'settings', `Đổi cài đặt: ${others.join(', ')}`)
-    if (changed.includes('username') || changed.includes('method')) channel.invalidate()
+    if (changed.includes('maxVideos')) channel.invalidate()
     res.json(saved)
   })
 
+  // Đăng nhập OAuth từ web: trả link cấp quyền, trình duyệt mở link đó; callback (localhost hoặc
+  // Worker) trả mã về và server tự đổi lấy token.
+  let pendingLogin = null
+  api.get('/auth/status', (req, res) => res.json({ ...publisher.authStatus(), pending: Boolean(pendingLogin) }))
+
   api.post('/auth/login', (req, res) => {
-    if (lock.busy) throw httpError(409, 'Trình duyệt đang bận, thử lại sau')
-    lock.busy = { kind: 'login' }
-    let started
-    try {
-      started = publisher.login(settings.get())
-    } catch (err) {
-      lock.busy = null
-      throw err
-    }
-    audit(req, 'login', 'Mở trình duyệt để đăng nhập TikTok')
-    Promise.resolve(started)
-      .then(() => {
-        settings.update({ lastLoginAt: new Date().toISOString() })
-        logAction({ level: 'success', actor: 'system', action: 'login', message: 'Đăng nhập TikTok thành công' })
+    const { url, done } = publisher.startLogin()
+    const attempt = {}
+    pendingLogin = attempt
+    audit(req, 'login', 'Bắt đầu đăng nhập TikTok (OAuth)')
+    done
+      .then((tokens) => {
+        logAction({ level: 'success', actor: 'system', action: 'login', message: `Đăng nhập TikTok thành công, scope: ${tokens.scope}` })
         channel.invalidate()
       })
       .catch((err) => logAction({ level: 'error', actor: 'system', action: 'login', message: `Đăng nhập thất bại: ${err.message}` }))
       .finally(() => {
-        lock.busy = null
+        if (pendingLogin === attempt) pendingLogin = null
       })
-    res.status(202).json({ started: true })
+    res.json({ url })
   })
 
   app.use('/api', api)

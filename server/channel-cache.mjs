@@ -1,63 +1,48 @@
 import { logAction } from '../src/logger.mjs'
 
 /**
- * Dữ liệu kênh luôn lấy từ TikTok. Chỉ giữ tạm trong RAM `ttlMs` để khỏi mở trình duyệt mỗi lần
- * chuyển trang; tắt server là mất, không ghi xuống đĩa.
+ * Dữ liệu kênh luôn lấy từ TikTok (Display API). Chỉ giữ tạm trong RAM `ttlMs` để chuyển trang
+ * không phải gọi API lại; tắt server là mất, không ghi xuống đĩa.
  */
-export function createChannelCache({ fetchChannel, lock, getSettings, ttlMs = 5 * 60_000 }) {
-  let cache = null // { data, username, at }
+export function createChannelCache({ fetchChannel, getSettings, ttlMs = 5 * 60_000 }) {
+  let cache = null // { data, at }
   let inflight = null
   let lastError = null
 
-  // Đổi kênh hoặc đổi nguồn (API/trình duyệt) thì cache cũ không còn dùng được
-  const keyOf = (s) => `${s.method}:${s.username}`
-
   async function load() {
-    const settings = getSettings()
-    lock.busy = { kind: 'fetch' }
     try {
-      const data = await fetchChannel({ username: settings.username, maxVideos: settings.maxVideos })
-      cache = { data, key: keyOf(settings), at: Date.now() }
+      const data = await fetchChannel({ maxVideos: getSettings().maxVideos })
+      cache = { data, at: Date.now() }
       lastError = null
+      const s = data.user.stats
       logAction({
         level: 'success',
         actor: 'system',
         action: 'fetch',
-        message: `Lấy dữ liệu kênh @${data.user.username || data.user.nickname} từ TikTok${data.source === 'api' ? ' (API)' : ''}: ${data.user.stats.followers} người theo dõi, ${data.videos.length}/${data.user.stats.videos} video`,
+        message:
+          `Lấy dữ liệu kênh ${data.user.username ? `@${data.user.username}` : data.user.nickname} từ TikTok API: ` +
+          `${s.followers ?? '?'} người theo dõi, ${data.videos.length}/${s.videos ?? '?'} video`,
       })
       return data
     } catch (err) {
       lastError = { message: err.message, at: new Date().toISOString() }
-      logAction({ level: 'error', actor: 'system', action: 'fetch', message: `Lấy dữ liệu kênh @${settings.username} thất bại: ${err.message}` })
+      logAction({ level: 'error', actor: 'system', action: 'fetch', message: `Lấy dữ liệu kênh thất bại: ${err.message}` })
       throw err
-    } finally {
-      lock.busy = null
     }
   }
 
   return {
-    /**
-     * Trả dữ liệu kênh. `refresh` = bỏ qua cache. Nếu trình duyệt đang bận đăng bài thì trả
-     * cache cũ (đánh dấu stale) thay vì chờ.
-     */
+    /** Trả dữ liệu kênh; `refresh` = bỏ qua cache. Các request trùng lúc dùng chung 1 lần gọi API. */
     async get({ refresh = false } = {}) {
-      const key = keyOf(getSettings())
-      const fresh = cache && cache.key === key && Date.now() - cache.at < ttlMs
-      if (fresh && !refresh) return { ...cache.data, cached: true }
-      if (inflight) return inflight
-      if (lock.busy) {
-        if (cache && cache.key === key) return { ...cache.data, cached: true, stale: true }
-        throw Object.assign(new Error('Trình duyệt đang bận (đang đăng bài hoặc đăng nhập), thử lại sau ít phút'), { status: 409 })
-      }
-      inflight = load().finally(() => {
+      if (cache && !refresh && Date.now() - cache.at < ttlMs) return { ...cache.data, cached: true }
+      inflight ||= load().finally(() => {
         inflight = null
       })
       return inflight
     },
-    peek: () => (cache ? { ...cache.data, cached: true } : null),
     lastError: () => lastError,
     invalidate() {
-      if (cache) cache.at = 0
+      cache = null
     },
   }
 }

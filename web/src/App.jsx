@@ -33,8 +33,8 @@ function useHashRoute() {
 
 /** Dữ liệu kênh lấy từ TikTok qua server; chỉ tải lại khi người dùng bấm "Làm mới" hoặc đổi kênh. */
 function useChannel(stats) {
-  // Chế độ API không cần tên kênh; chế độ trình duyệt thì cần
-  const key = stats && (stats.method === 'api' || stats.username) ? `${stats.method}:${stats.username}` : ''
+  // Tải lại khi đăng nhập / đổi tài khoản
+  const key = stats?.auth?.loggedIn ? `${stats.auth.openId}:${stats.auth.scopes.join(',')}` : ''
   const [state, setState] = useState({ data: null, error: null, loading: false })
   const load = useCallback(async (refresh = false) => {
     setState((s) => ({ ...s, loading: true, error: null }))
@@ -105,7 +105,7 @@ export default function App() {
             )}
             <div>
               <strong>TikTok Manager</strong>
-              <small>{channel.data?.user.username ? `@${channel.data.user.username}` : stats?.username ? `@${stats.username}` : channel.data?.user.nickname || 'Chưa chọn kênh'}</small>
+              <small>{channel.data?.user.username ? `@${channel.data.user.username}` : channel.data?.user.nickname || (stats?.auth?.loggedIn ? 'Đã đăng nhập' : 'Chưa đăng nhập')}</small>
             </div>
           </div>
           <nav>
@@ -121,8 +121,6 @@ export default function App() {
             {busy ? <span className="dot pulse" /> : <span className={`dot ${stats?.paused ? 'off' : 'on'}`} />}
             <span>
               {busy?.kind === 'publish' && 'Đang đăng video…'}
-              {busy?.kind === 'login' && 'Đang chờ đăng nhập…'}
-              {busy?.kind === 'fetch' && 'Đang lấy dữ liệu từ TikTok…'}
               {!busy && (stats?.paused ? 'Tự động đăng: tạm dừng' : 'Tự động đăng: đang bật')}
             </span>
           </div>
