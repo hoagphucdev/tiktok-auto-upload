@@ -1,0 +1,21 @@
+{
+  "name": "tiktok-uploader",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Auto upload video lên TikTok qua Content Posting API chính thức",
+  "type": "module",
+  "bin": {
+    "tiktok-uploader": "src/cli.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "login": "node src/cli.mjs login",
+    "whoami": "node src/cli.mjs whoami",
+    "upload": "node src/cli.mjs upload",
+    "queue": "node src/cli.mjs queue",
+    "watch": "node src/cli.mjs watch",
+    "test": "node --test test/*.test.mjs"
+  }
+}
