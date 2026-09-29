@@ -3,37 +3,65 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { createApp } from '../server/app.mjs'
-import { createDb } from '../server/db.mjs'
-import { createScheduler, pickNext } from '../server/scheduler.mjs'
+
+// Nhật ký ghi vào thư mục tạm (phải đặt trước khi import logger)
+process.env.LOG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'tt-logs-'))
+const { createApp } = await import('../server/app.mjs')
+const { createChannelCache } = await import('../server/channel-cache.mjs')
+const { createPendingStore, createSettingsStore } = await import('../server/store.mjs')
+const { createScheduler, pickNext, publishHistory } = await import('../server/scheduler.mjs')
+const { localDay, logAction, readLog, listLogDays } = await import('../src/logger.mjs')
 
 const MIN = 60_000
 const now = Date.parse('2026-10-01T12:00:00Z')
 const v = (over) => ({ status: 'scheduled', scheduledAt: new Date(now - MIN).toISOString(), force: false, ...over })
+const noHistory = { publishedToday: 0, lastPublishedAt: null }
 
 test('pickNext: chọn bài tới giờ sớm nhất, bỏ qua bài chưa tới giờ', () => {
   const a = v({ id: 'a', scheduledAt: new Date(now - 5 * MIN).toISOString() })
   const b = v({ id: 'b', scheduledAt: new Date(now - 10 * MIN).toISOString() })
   const c = v({ id: 'c', scheduledAt: new Date(now + MIN).toISOString() })
-  assert.equal(pickNext([a, b, c], { gapMinutes: 0 }, now).video.id, 'b')
-  assert.deepEqual(pickNext([c], {}, now), {})
+  assert.equal(pickNext([a, b, c], { gapMinutes: 0 }, noHistory, now).video.id, 'b')
+  assert.deepEqual(pickNext([c], {}, noHistory, now), {})
 })
 
 test('pickNext: tôn trọng khoảng cách và giới hạn/ngày, trừ bài "đăng ngay"', () => {
-  const recent = { status: 'published', publishedAt: new Date(now - 10 * MIN).toISOString() }
+  const history = { publishedToday: 1, lastPublishedAt: new Date(now - 10 * MIN).toISOString() }
   const due = v({ id: 'due' })
-  assert.equal(pickNext([recent, due], { gapMinutes: 60 }, now).blocked, 'gap')
-  assert.equal(pickNext([recent, due], { dailyLimit: 1 }, now).blocked, 'daily_limit')
+  assert.equal(pickNext([due], { gapMinutes: 60 }, history, now).blocked, 'gap')
+  assert.equal(pickNext([due], { dailyLimit: 1 }, history, now).blocked, 'daily_limit')
   const forced = v({ id: 'forced', force: true, scheduledAt: new Date(now).toISOString() })
-  assert.equal(pickNext([recent, due, forced], { gapMinutes: 60, dailyLimit: 1 }, now).video.id, 'forced')
+  assert.equal(pickNext([due, forced], { gapMinutes: 60, dailyLimit: 1 }, history, now).video.id, 'forced')
 })
 
-async function startServer(publish) {
+test('logger: ghi .txt theo ngày, 1 dòng/mục, đọc lại được; lịch sử đăng lấy từ log', () => {
+  logAction({ level: 'success', actor: 'scheduler', action: 'publish', message: 'Đã đăng "A"\ncó | ký tự lạ', target: 'x' })
+  const file = path.join(process.env.LOG_DIR, `${localDay()}.txt`)
+  const lines = fs.readFileSync(file, 'utf8').trim().split('\n')
+  assert.match(lines.at(-1), /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \| SUCCESS \| scheduler \| publish +\| Đã đăng "A" có \/ ký tự lạ \| x$/)
+  assert.equal(readLog()[0].message, 'Đã đăng "A" có / ký tự lạ')
+  assert.equal(listLogDays()[0].day, localDay())
+  const h = publishHistory()
+  assert.ok(h.publishedToday >= 1)
+  assert.ok(Date.now() - Date.parse(h.lastPublishedAt) < 5000)
+})
+
+async function startServer({ publish = async () => ({ status: 'PUBLISH_COMPLETE' }), fetchChannel } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tt-server-'))
-  const db = createDb(dir, { privacy: 'SELF_ONLY', gapMinutes: 0, dailyLimit: 0, paused: false, hashtagSets: [] })
+  const store = createPendingStore(dir)
+  const settings = createSettingsStore(dir, { username: 'demo', privacy: 'SELF_ONLY', gapMinutes: 0, dailyLimit: 0, paused: false, hashtagSets: [] })
   const lock = { busy: null }
-  const scheduler = createScheduler({ db, publish, lock, intervalMs: 60_000 })
-  const app = createApp({ db, scheduler, lock, publisher: { login: async () => {} } })
+  let fetches = 0
+  const channel = createChannelCache({
+    fetchChannel: async (opts) => {
+      fetches++
+      return fetchChannel ? fetchChannel(opts) : { user: { username: opts.username }, videos: [], fetchedAt: new Date().toISOString() }
+    },
+    lock,
+    getSettings: settings.get,
+  })
+  const scheduler = createScheduler({ store, getSettings: settings.get, publish, lock, intervalMs: 60_000, history: () => noHistory })
+  const app = createApp({ store, settings, channel, scheduler, lock, publisher: { login: async () => {} } })
   const server = await new Promise((r) => {
     const s = app.listen(0, '127.0.0.1', () => r(s))
   })
@@ -43,9 +71,10 @@ async function startServer(publish) {
       method,
       ...(body instanceof FormData ? { body } : body && { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
     })
-    return { status: res.status, body: res.status === 204 ? null : await res.json() }
+    const text = await res.text()
+    return { status: res.status, body: text && res.headers.get('content-type')?.includes('json') ? JSON.parse(text) : text }
   }
-  return { db, scheduler, call, close: () => server.close() }
+  return { dir, store, scheduler, call, fetches: () => fetches, close: () => server.close() }
 }
 
 const uploadForm = (name = 'Video thử.mp4', fields = {}) => {
@@ -55,82 +84,111 @@ const uploadForm = (name = 'Video thử.mp4', fields = {}) => {
   return form
 }
 
-test('API: tải lên → sửa → đăng ngay → đã đăng', async () => {
+test('API: tải lên → sửa → đăng ngay → rời hàng chờ (không lưu lại sau khi đăng)', async () => {
   const published = []
-  const srv = await startServer(async (video) => {
-    published.push(video.caption)
-    return { status: 'PUBLISH_COMPLETE' }
+  const srv = await startServer({
+    publish: async (video) => {
+      published.push(video.caption)
+      return { status: 'PUBLISH_COMPLETE' }
+    },
   })
   try {
-    const up = await srv.call('POST', '/videos', uploadForm('Video thử.mp4', { caption: 'hello #fyp', tags: 'a, b' }))
+    const up = await srv.call('POST', '/pending', uploadForm('Video thử.mp4', { caption: 'hello #fyp', tags: 'a, b' }))
     assert.equal(up.status, 201)
     assert.equal(up.body.title, 'Video thử')
     assert.deepEqual(up.body.tags, ['a', 'b'])
-    assert.equal(up.body.status, 'draft')
+    assert.ok(fs.existsSync(path.join(srv.dir, 'pending', `${up.body.id}.json`)))
 
-    const bad = await srv.call('POST', '/videos', uploadForm('x.exe'))
-    assert.equal(bad.status, 400)
+    assert.equal((await srv.call('POST', '/pending', uploadForm('x.exe'))).status, 400)
 
-    const edit = await srv.call('PATCH', `/videos/${up.body.id}`, { caption: 'mới #robot', privacy: 'PUBLIC_TO_EVERYONE' })
+    const edit = await srv.call('PATCH', `/pending/${up.body.id}`, { caption: 'mới #robot', privacy: 'PUBLIC_TO_EVERYONE' })
     assert.equal(edit.body.caption, 'mới #robot')
-    assert.equal((await srv.call('PATCH', `/videos/${up.body.id}`, { privacy: 'NOPE' })).status, 400)
+    assert.equal((await srv.call('PATCH', `/pending/${up.body.id}`, { privacy: 'NOPE' })).status, 400)
+    await srv.call('PATCH', `/pending/${up.body.id}`, { status: 'scheduled', scheduledAt: '2999-01-01T00:00:00Z' })
+    assert.equal((await srv.call('PATCH', `/pending/${up.body.id}`, { scheduledAt: '' })).status, 400)
 
-    await srv.call('PATCH', `/videos/${up.body.id}`, { status: 'scheduled', scheduledAt: '2999-01-01T00:00:00Z' })
-    const cleared = await srv.call('PATCH', `/videos/${up.body.id}`, { scheduledAt: '' })
-    assert.equal(cleared.status, 400)
-
-    await srv.call('POST', `/videos/${up.body.id}/publish`)
+    await srv.call('POST', `/pending/${up.body.id}/publish`)
     await srv.scheduler.tick()
-    const after = await srv.call('GET', `/videos/${up.body.id}`)
-    assert.equal(after.body.status, 'published')
     assert.deepEqual(published, ['mới #robot'])
+    assert.equal((await srv.call('GET', `/pending/${up.body.id}`)).status, 404)
+    assert.deepEqual(fs.readdirSync(path.join(srv.dir, 'pending')), [])
 
-    const stats = await srv.call('GET', '/stats')
-    assert.equal(stats.body.counts.published, 1)
-    assert.equal(stats.body.publishedToday, 1)
+    const log = (await srv.call('GET', `/logs/${localDay()}`)).body
+    const actions = log.map((e) => `${e.actor.split(':')[0]}/${e.action}`)
+    for (const a of ['web/upload', 'web/edit', 'web/publish', 'scheduler/publish']) assert.ok(actions.includes(a), a)
+    assert.ok(log.some((e) => e.message.includes('quyền xem → Mọi người')))
+
+    const dl = await srv.call('GET', `/logs/${localDay()}/download`)
+    assert.equal(dl.status, 200)
+    assert.match(dl.body, /\| web:127\.0\.0\.1 \| upload/)
+    assert.equal((await srv.call('GET', '/logs/../../etc/passwd')).status, 404)
+    assert.equal((await srv.call('GET', '/logs/2026-13-99x')).status, 400)
   } finally {
     srv.close()
   }
 })
 
-test('API: lên lịch hàng loạt và lỗi khi đăng', async () => {
-  const srv = await startServer(async () => {
-    throw new Error('Không thấy nút Post')
+test('API: lên lịch hàng loạt, lỗi khi đăng giữ lại trong hàng chờ', async () => {
+  const srv = await startServer({
+    publish: async () => {
+      throw new Error('Không thấy nút Post')
+    },
   })
   try {
     const ids = []
-    for (const n of ['a.mp4', 'b.mp4', 'c.mp4']) ids.push((await srv.call('POST', '/videos', uploadForm(n))).body.id)
+    for (const n of ['a.mp4', 'b.mp4', 'c.mp4']) ids.push((await srv.call('POST', '/pending', uploadForm(n))).body.id)
     const start = new Date(Date.now() - 1000).toISOString()
-    const bulk = await srv.call('POST', '/videos/bulk', { ids, action: 'schedule', startAt: start, intervalMinutes: 30 })
-    assert.equal(bulk.body.count, 3)
-    const list = (await srv.call('GET', '/videos?status=scheduled')).body
-    const times = list.map((x) => Date.parse(x.scheduledAt)).sort()
+    assert.equal((await srv.call('POST', '/pending/bulk', { ids, action: 'schedule', startAt: start, intervalMinutes: 30 })).body.count, 3)
+    const times = (await srv.call('GET', '/pending?status=scheduled')).body.map((x) => Date.parse(x.scheduledAt)).sort()
     assert.equal(times[1] - times[0], 30 * MIN)
 
     await srv.scheduler.tick()
-    const failed = (await srv.call('GET', '/videos?status=failed')).body
+    const failed = (await srv.call('GET', '/pending?status=failed')).body
     assert.equal(failed.length, 1)
     assert.match(failed[0].lastError, /Không thấy nút Post/)
 
-    const logs = (await srv.call('GET', `/logs?videoId=${failed[0].id}`)).body
-    assert.ok(logs.some((l) => l.level === 'error'))
+    await srv.call('POST', '/pending/bulk', { ids, action: 'delete' })
+    assert.equal((await srv.call('GET', '/pending')).body.length, 0)
+    assert.deepEqual(fs.readdirSync(path.join(srv.dir, 'pending')), [])
+  } finally {
+    srv.close()
+  }
+})
 
-    await srv.call('POST', '/videos/bulk', { ids, action: 'delete' })
-    assert.equal((await srv.call('GET', '/videos')).body.length, 0)
-    assert.equal(fs.readdirSync(srv.db.videosDir).length, 0)
+test('API: dữ liệu kênh lấy từ TikTok, cache ngắn trong RAM, refresh bắt buộc lấy lại', async () => {
+  const srv = await startServer({
+    fetchChannel: async ({ username }) => ({
+      user: { username, stats: { followers: 10 } },
+      videos: [{ id: '1', caption: 'x' }],
+      fetchedAt: new Date().toISOString(),
+    }),
+  })
+  try {
+    const a = await srv.call('GET', '/channel')
+    assert.equal(a.body.user.username, 'demo')
+    assert.equal((await srv.call('GET', '/channel')).body.cached, true)
+    assert.equal(srv.fetches(), 1)
+    await srv.call('GET', '/channel?refresh=1')
+    assert.equal(srv.fetches(), 2)
+    assert.equal((await srv.call('GET', '/channel/videos/1')).body.caption, 'x')
+    assert.equal((await srv.call('GET', '/channel/videos/2')).status, 404)
+    // Không có file dữ liệu kênh nào được ghi xuống đĩa
+    assert.deepEqual(fs.readdirSync(srv.dir).sort(), ['pending', 'settings.json'])
   } finally {
     srv.close()
   }
 })
 
 test('API: cài đặt được kiểm tra hợp lệ', async () => {
-  const srv = await startServer(async () => ({}))
+  const srv = await startServer()
   try {
-    const ok = await srv.call('PUT', '/settings', { gapMinutes: '90', paused: 1, hashtagSets: [{ name: 'Robot', tags: '#robot' }, { name: '' }] })
+    const ok = await srv.call('PUT', '/settings', { username: '@my.channel', gapMinutes: '90', paused: 1, hashtagSets: [{ name: 'Robot', tags: '#robot' }, { name: '' }] })
+    assert.equal(ok.body.username, 'my.channel')
     assert.equal(ok.body.gapMinutes, 90)
     assert.equal(ok.body.paused, true)
     assert.equal(ok.body.hashtagSets.length, 1)
     assert.equal((await srv.call('PUT', '/settings', { method: 'hack' })).status, 400)
+    assert.equal((await srv.call('PUT', '/settings', { username: 'bad name!' })).status, 400)
   } finally {
     srv.close()
   }

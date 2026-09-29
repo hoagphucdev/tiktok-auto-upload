@@ -10,19 +10,32 @@ async function request(method, url, body) {
   return data
 }
 
+const qs = (params = {}) => new URLSearchParams(Object.entries(params).filter(([, v]) => v !== '' && v != null))
+
 export const api = {
-  videos: (params = {}) => request('GET', `/videos?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),
-  video: (id) => request('GET', `/videos/${id}`),
-  updateVideo: (id, patch) => request('PATCH', `/videos/${id}`, patch),
-  deleteVideo: (id) => request('DELETE', `/videos/${id}`),
-  publishNow: (id) => request('POST', `/videos/${id}/publish`),
-  bulk: (body) => request('POST', '/videos/bulk', body),
+  // Kênh TikTok — luôn lấy từ TikTok (server chỉ giữ tạm vài phút trong RAM)
+  channel: (refresh = false) => request('GET', `/channel${refresh ? '?refresh=1' : ''}`),
+  channelVideo: (id) => request('GET', `/channel/videos/${id}`),
+
+  // Hàng chờ đăng (video chưa có trên TikTok)
+  pending: (params = {}) => request('GET', `/pending?${qs(params)}`),
+  pendingItem: (id) => request('GET', `/pending/${id}`),
+  updatePending: (id, patch) => request('PATCH', `/pending/${id}`, patch),
+  deletePending: (id) => request('DELETE', `/pending/${id}`),
+  publishNow: (id) => request('POST', `/pending/${id}/publish`),
+  bulk: (body) => request('POST', '/pending/bulk', body),
+  pendingFileUrl: (id) => `/api/pending/${id}/file`,
+
   stats: () => request('GET', '/stats'),
-  logs: (params = {}) => request('GET', `/logs?${new URLSearchParams(params)}`),
+
+  // Nhật ký .txt theo ngày
+  logDays: () => request('GET', '/logs'),
+  logDay: (day, params = {}) => request('GET', `/logs/${day}?${qs(params)}`),
+  logDownloadUrl: (day) => `/api/logs/${day}/download`,
+
   settings: () => request('GET', '/settings'),
   saveSettings: (patch) => request('PUT', '/settings', patch),
   login: () => request('POST', '/auth/login'),
-  fileUrl: (id) => `/api/videos/${id}/file`,
 
   // Dùng XHR để có tiến trình upload
   upload(file, fields, onProgress) {
@@ -31,7 +44,7 @@ export const api = {
       form.append('file', file)
       for (const [k, v] of Object.entries(fields)) if (v != null) form.append(k, v)
       const xhr = new XMLHttpRequest()
-      xhr.open('POST', '/api/videos')
+      xhr.open('POST', '/api/pending')
       xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total)
       xhr.onload = () => {
         const data = JSON.parse(xhr.responseText || '{}')

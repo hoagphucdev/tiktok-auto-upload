@@ -39,7 +39,7 @@ export function resolveExecutable() {
  * - BROWSER_CDP_URL có giá trị → mở tab mới trong Brave/Chrome bạn đang mở sẵn
  * - ngược lại → tự mở trình duyệt riêng với profile .browser-profile/
  */
-async function launch({ headless = config.headless } = {}) {
+export async function launch({ headless = config.headless } = {}) {
   let chromium
   try {
     ;({ chromium } = await import('playwright'))

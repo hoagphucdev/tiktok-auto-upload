@@ -22,29 +22,61 @@ npm run setup      # cài thư viện + Chromium + build giao diện
 npm start          # mở http://127.0.0.1:8787
 ```
 
-Lần đầu vào **Cài đặt → Đăng nhập TikTok**: một cửa sổ trình duyệt mở ra, bạn đăng nhập, tool tự
-nhận biết và đóng cửa sổ. (Hoặc điền CDP URL để dùng tab Brave đang mở sẵn, xem phần Brave bên dưới.)
+Lần đầu vào **Cài đặt**:
+
+1. Điền **tên kênh** (`@username`).
+2. Bấm **Đăng nhập TikTok**: một cửa sổ trình duyệt mở ra, bạn đăng nhập, tool tự nhận biết và đóng
+   cửa sổ. (Hoặc điền CDP URL để dùng tab Brave đang mở sẵn, xem phần Brave bên dưới.)
+
+### Dữ liệu lấy từ đâu
+
+| Dữ liệu | Nguồn | Lưu trên máy? |
+|---|---|---|
+| Thông tin kênh (tên, avatar, bio, người theo dõi, lượt thích, số video) | Lấy trực tiếp từ trang kênh trên TikTok | **Không** — chỉ giữ tạm 5 phút trong RAM để chuyển trang cho nhanh |
+| Video đã đăng (caption, hashtag, ngày đăng, thời lượng, ảnh bìa, xem/thích/bình luận/chia sẻ/lưu, ghim, riêng tư, âm thanh, link) | Lấy trực tiếp từ TikTok | **Không** |
+| Video chưa đăng (hàng chờ) | Bạn tải lên | Có: `data/pending/` (file video + file .json cùng tên). Đăng xong thì tự xoá |
+| Cài đặt | Bạn nhập | `data/settings.json` |
+| Nhật ký thao tác | Tool ghi | `data/logs/YYYY-MM-DD.txt`, mỗi ngày 1 file |
+
+Tool đọc dữ liệu bằng trình duyệt đã đăng nhập: mở trang `tiktok.com/@kênh`, đọc thông tin hồ sơ
+và danh sách video mà chính trang TikTok tải về khi cuộn (xem kênh của mình nên thấy cả video riêng
+tư). Mỗi lần lấy mất khoảng 10–60 giây; bấm **Làm mới từ TikTok** để lấy số liệu mới nhất. Nếu
+TikTok hiện captcha, mở trình duyệt của tool (tắt chạy ẩn) và giải captcha rồi thử lại.
+
+### Các trang
 
 | Trang | Làm được gì |
 |---|---|
-| **Tổng quan** | Số video theo trạng thái, số bài hôm nay / giới hạn, video sắp đăng, hoạt động gần đây, nút tạm dừng tự động đăng |
-| **Thư viện video** | Kéo thả nhiều video để tải lên (vào mục Nháp), lọc theo trạng thái, tìm kiếm, chọn nhiều để lên lịch hàng loạt / chuyển về nháp / xoá |
-| **Sửa video** | Xem video, sửa caption (đếm ký tự, hiện hashtag), chèn nhanh bộ hashtag, chọn ai được xem, hẹn giờ, tag nội bộ, ghi chú, lịch sử; nút Lên lịch / Đăng ngay / Thử lại |
-| **Lịch đăng** | Xem theo tuần các video đã lên lịch và đã đăng |
-| **Nhật ký** | Mọi hoạt động và lỗi, lọc theo mức |
-| **Cài đặt** | Đăng nhập TikTok, cách đăng (browser/API), trình duyệt (Chromium/Brave/CDP), khoảng cách giữa 2 bài, số bài tối đa/ngày, bộ hashtag |
+| **Tổng quan** | Thông tin kênh, tổng/trung bình lượt xem, thích, bình luận, tỉ lệ tương tác, top video xem nhiều nhất, tình trạng hàng chờ, nhật ký hôm nay |
+| **Video trên kênh** | Bảng hoặc lưới toàn bộ video trên TikTok, tìm kiếm, lọc công khai/riêng tư, sắp xếp theo xem/thích/bình luận/chia sẻ/lưu/tương tác. Bấm 1 video để xem bằng **player TikTok nhúng (iframe)** kèm đầy đủ thông tin và link mở trên TikTok (video riêng tư thì chỉ có link) |
+| **Hàng chờ đăng** | Kéo thả nhiều video để tải lên, soạn caption, chèn bộ hashtag, chọn ai được xem, hẹn giờ, lên lịch hàng loạt, Đăng ngay / Thử lại |
+| **Lịch đăng** | Theo tuần: video đã đăng (từ TikTok) và video đã lên lịch (từ hàng chờ) |
+| **Nhật ký** | Xem nhật ký theo ngày, lọc theo mức và nguồn, **tải file .txt** |
+| **Cài đặt** | Tên kênh, số video lấy mỗi lần, đăng nhập TikTok, cách đăng, trình duyệt (Chromium/Brave/CDP), khoảng cách giữa 2 bài, số bài tối đa/ngày, bộ hashtag |
 
-Cách bộ lập lịch chạy:
+### Nhật ký thao tác
+
+Mọi thao tác được ghi vào `data/logs/YYYY-MM-DD.txt` (1 file mỗi ngày, theo giờ máy chạy server):
+
+```
+2026-09-29 13:26:42 | INFO    | web:127.0.0.1 | upload     | Tải lên "Kaiju đại chiến" (0.1 MB) vào hàng chờ | pending=bb27…
+2026-09-29 13:26:43 | INFO    | web:127.0.0.1 | edit       | Sửa "Gipsy Danger ra khơi": caption, quyền xem → Mọi người | pending=372d…
+2026-09-29 13:26:47 | SUCCESS | scheduler | publish    | Đã đăng "Gipsy Danger ra khơi" lên TikTok (quyền xem: PUBLIC_TO_EVERYONE) | …
+2026-09-29 13:28:22 | SUCCESS | system    | fetch      | Lấy dữ liệu kênh @gipsy.danger từ TikTok: 128400 người theo dõi, 8/8 video |
+```
+
+Cột: thời gian · mức (INFO/SUCCESS/WARN/ERROR) · nguồn (`web:<IP>` = người dùng trên web,
+`scheduler` = tự động đăng, `cli`, `system`) · thao tác · nội dung · đối tượng. Các lệnh CLI cũng
+ghi vào cùng file.
+
+### Bộ lập lịch
 
 - Server kiểm tra mỗi 20 giây, mỗi lần đăng **tối đa 1** video đã tới giờ hẹn.
-- Tôn trọng **khoảng cách tối thiểu** giữa 2 bài và **số bài tối đa mỗi ngày**. Nút **Đăng ngay**
-  bỏ qua hai giới hạn này.
-- Đăng lỗi → video sang trạng thái **Lỗi** kèm lý do (và ảnh chụp màn hình trong `errors/` ở chế độ
-  browser); bấm **Thử lại** khi đã xử lý. Nếu TikTok báo giới hạn tần suất, video tự lùi lịch 15 phút.
-- **Server phải đang chạy** thì mới tự đăng được. Nếu tắt máy lúc tới giờ, video sẽ được đăng khi
-  bạn bật lại server.
-
-Dữ liệu (video đã tải lên + `db.json`) nằm trong `data/`. Sao lưu thư mục này là đủ.
+- Tôn trọng **khoảng cách tối thiểu** giữa 2 bài và **số bài tối đa mỗi ngày** (đếm từ nhật ký).
+  Nút **Đăng ngay** bỏ qua hai giới hạn này.
+- Đăng lỗi → video ở lại hàng chờ với trạng thái **Lỗi** kèm lý do (và ảnh chụp màn hình trong
+  `errors/`); bấm **Thử lại** khi đã xử lý. Nếu TikTok báo giới hạn tần suất, video tự lùi lịch 15 phút.
+- **Server phải đang chạy** thì mới tự đăng được.
 
 Truy cập từ điện thoại cùng mạng Wi-Fi: đặt `HOST=0.0.0.0` và `ADMIN_PASSWORD=...` trong `.env`, rồi
 vào `http://<IP máy tính>:8787`.

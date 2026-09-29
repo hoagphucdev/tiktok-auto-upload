@@ -5,7 +5,7 @@ import { PRIVACY_LABEL, STATUS_LABEL, fmtSize, fromLocalInput, toLocalInput, use
 import { Empty, PageHeader, StatusBadge, When } from '../components/common.jsx'
 import UploadZone from '../components/UploadZone.jsx'
 
-const FILTERS = ['', 'draft', 'scheduled', 'publishing', 'published', 'failed']
+const FILTERS = ['', 'draft', 'scheduled', 'publishing', 'failed']
 
 function readInitialStatus() {
   const s = sessionStorage.getItem('libraryStatus') || ''
@@ -13,13 +13,13 @@ function readInitialStatus() {
   return s
 }
 
-export default function Library() {
+export default function Queue() {
   const { openEditor, run, version, stats } = useApp()
   const [status, setStatus] = useState(readInitialStatus)
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState(new Set())
   const [bulkOpen, setBulkOpen] = useState(false)
-  const [videos] = usePolling(() => api.videos({ status, q }), 5000, [status, q, version])
+  const [videos] = usePolling(() => api.pending({ status, q }), 5000, [status, q, version])
 
   const toggle = (id) =>
     setSelected((s) => {
@@ -32,7 +32,7 @@ export default function Library() {
   const allSelected = videos?.length > 0 && ids.length === videos.length
 
   async function bulk(action, extra = {}) {
-    if (action === 'delete' && !confirm(`Xoá vĩnh viễn ${ids.length} video khỏi tool? (Không xoá trên TikTok)`)) return
+    if (action === 'delete' && !confirm(`Xoá ${ids.length} video khỏi hàng chờ? (File video trên máy cũ bị xoá)`)) return
     await run(() => api.bulk({ ids, action, ...extra }), 'Đã cập nhật')
     setSelected(new Set())
     setBulkOpen(false)
@@ -40,7 +40,7 @@ export default function Library() {
 
   return (
     <>
-      <PageHeader title="Thư viện video" subtitle="Tải lên, soạn caption, lên lịch và theo dõi trạng thái" />
+      <PageHeader title="Hàng chờ đăng" subtitle="Video chưa có trên TikTok: tải lên, soạn caption, lên lịch. Đăng xong video tự rời hàng chờ và hiện ở mục Video trên kênh." />
 
       <UploadZone />
 
@@ -75,7 +75,7 @@ export default function Library() {
       {!videos ? (
         <p className="muted">Đang tải…</p>
       ) : videos.length === 0 ? (
-        <Empty>{q || status ? 'Không có video nào khớp bộ lọc.' : 'Chưa có video nào. Kéo thả video vào ô phía trên để bắt đầu.'}</Empty>
+        <Empty>{q || status ? 'Không có video nào khớp bộ lọc.' : 'Hàng chờ trống. Kéo thả video vào ô phía trên để bắt đầu.'}</Empty>
       ) : (
         <>
           <label className="select-all">
@@ -90,7 +90,7 @@ export default function Library() {
             {videos.map((v) => (
               <article key={v.id} className={`video-card ${selected.has(v.id) ? 'selected' : ''}`}>
                 <div className="thumb" onClick={() => openEditor(v.id)}>
-                  <video src={`${api.fileUrl(v.id)}#t=0.5`} preload="metadata" muted playsInline />
+                  <video src={`${api.pendingFileUrl(v.id)}#t=0.5`} preload="metadata" muted playsInline />
                   <StatusBadge status={v.status} />
                   <input
                     type="checkbox"
@@ -112,16 +112,11 @@ export default function Library() {
                       ⏰ <When iso={v.scheduledAt} />
                     </div>
                   )}
-                  {v.status === 'published' && (
-                    <div className="meta">
-                      ✓ <When iso={v.publishedAt} />
-                    </div>
-                  )}
                   {v.status === 'failed' && <p className="danger-text clamp-2">{v.lastError}</p>}
                 </div>
                 <div className="card-actions">
                   <button onClick={() => openEditor(v.id)}>Sửa</button>
-                  {v.status !== 'publishing' && v.status !== 'published' && (
+                  {v.status !== 'publishing' && (
                     <button className="primary" onClick={() => run(() => api.publishNow(v.id), 'Đã đưa vào hàng đợi đăng ngay')}>
                       {v.status === 'failed' ? 'Thử lại' : 'Đăng ngay'}
                     </button>

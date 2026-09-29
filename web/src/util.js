@@ -4,8 +4,8 @@ export const STATUS_LABEL = {
   draft: 'Nháp',
   scheduled: 'Đã lên lịch',
   publishing: 'Đang đăng',
-  published: 'Đã đăng',
   failed: 'Lỗi',
+  published: 'Đã đăng',
 }
 
 export const PRIVACY_LABEL = {
@@ -39,6 +39,12 @@ export function toLocalInput(iso) {
   return d.toISOString().slice(0, 16)
 }
 export const fromLocalInput = (value) => (value ? new Date(value).toISOString() : null)
+
+// 1234567 → "1,2 Tr"; dùng cho số liệu TikTok
+export const fmtCount = (n) =>
+  n == null ? '—' : new Intl.NumberFormat('vi-VN', { notation: n >= 10_000 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(n)
+export const fmtDuration = (sec) => (sec ? `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}` : '—')
+export const engagementRate = (s) => (s.views ? ((s.likes + s.comments + s.shares + s.saves) / s.views) * 100 : 0)
 
 export const hashtagsOf = (caption) => caption.match(/#[\p{L}\p{N}_]+/gu) || []
 

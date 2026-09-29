@@ -6,6 +6,7 @@ import { browserLogin } from './browser.mjs'
 import { fetchPublishStatus, queryCreatorInfo } from './api.mjs'
 import { publishVideo } from './upload.mjs'
 import { runQueue, watchQueue } from './queue.mjs'
+import { logAction } from './logger.mjs'
 
 const HELP = `
 TikTok auto uploader
@@ -77,7 +78,15 @@ async function main() {
         wait: !values['no-wait'],
       })
       console.log(result)
-      if (result.status === 'FAILED' || result.status === 'TIMEOUT') process.exitCode = 1
+      const failed = result.status === 'FAILED' || result.status === 'TIMEOUT'
+      logAction({
+        level: failed ? 'error' : 'success',
+        actor: 'cli',
+        action: 'publish',
+        message: `${failed ? 'Đăng thất bại' : 'Đã đăng'} ${arg} (${result.status})`,
+        target: values.caption.slice(0, 80),
+      })
+      if (failed) process.exitCode = 1
       return
     }
     case 'queue':
@@ -91,5 +100,6 @@ async function main() {
 
 main().catch((err) => {
   console.error(`Lỗi: ${err.message}`)
+  logAction({ level: 'error', actor: 'cli', action: command || '-', message: err.message, target: arg })
   process.exit(1)
 })

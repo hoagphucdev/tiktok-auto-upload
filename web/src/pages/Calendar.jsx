@@ -17,16 +17,26 @@ const startOfWeek = (t) => {
 }
 
 export default function Calendar() {
-  const { openEditor, version } = useApp()
+  const { openEditor, openTikTok, version, channel } = useApp()
   const [weekStart, setWeekStart] = useState(() => startOfWeek(Date.now()))
-  const [videos] = usePolling(() => api.videos(), 10_000, [version])
+  const [pending] = usePolling(() => api.pending(), 10_000, [version])
 
   const days = Array.from({ length: 7 }, (_, i) => new Date(weekStart.getTime() + i * DAY_MS))
+  // Bài đã đăng lấy từ TikTok; bài sắp đăng lấy từ hàng chờ
+  const all = [
+    ...(channel.data?.videos || []).map((v) => ({
+      key: `tt-${v.id}`,
+      at: v.createdAt,
+      title: v.caption || '(không caption)',
+      status: 'published',
+      open: () => openTikTok(v.id),
+    })),
+    ...(pending || [])
+      .filter((v) => v.status !== 'draft' && v.scheduledAt)
+      .map((v) => ({ key: v.id, at: v.scheduledAt, title: v.title || v.originalName, status: v.status, open: () => openEditor(v.id) })),
+  ]
   const itemsOn = (day) =>
-    (videos || [])
-      .map((v) => ({ v, at: v.publishedAt || v.scheduledAt }))
-      .filter(({ v, at }) => at && v.status !== 'draft' && startOfDay(at).getTime() === day.getTime())
-      .sort((a, b) => a.at.localeCompare(b.at))
+    all.filter((x) => x.at && startOfDay(x.at).getTime() === day.getTime()).sort((a, b) => a.at.localeCompare(b.at))
 
   const shift = (weeks) => setWeekStart((d) => new Date(d.getTime() + weeks * 7 * DAY_MS))
   const today = startOfDay(Date.now()).getTime()
@@ -53,18 +63,18 @@ export default function Calendar() {
                 <strong>{day.getDate()}</strong>
                 {items.length > 0 && <span className="count">{items.length}</span>}
               </header>
-              {items.map(({ v, at }) => (
-                <button key={v.id} className={`slot ${v.status}`} onClick={() => openEditor(v.id)}>
-                  <time>{new Date(at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time>
-                  <span className="clamp-2">{v.title || v.originalName}</span>
-                  <StatusBadge status={v.status} />
+              {items.map((x) => (
+                <button key={x.key} className={`slot ${x.status}`} onClick={x.open}>
+                  <time>{new Date(x.at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time>
+                  <span className="clamp-2">{x.title}</span>
+                  <StatusBadge status={x.status} />
                 </button>
               ))}
             </section>
           )
         })}
       </div>
-      <p className="muted small">Lịch hiển thị video đã lên lịch, đang đăng, đã đăng và bị lỗi. Bấm vào một video để sửa hoặc đổi giờ.</p>
+      <p className="muted small">Video đã đăng lấy từ TikTok; video đã lên lịch / lỗi lấy từ hàng chờ. Bấm vào một mục để xem hoặc sửa.</p>
     </>
   )
 }

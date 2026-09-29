@@ -1,8 +1,11 @@
 import { config } from '../src/config.mjs'
 import { browserLoginAuto } from '../src/browser.mjs'
+import { fetchChannel } from '../src/channel.mjs'
 import { publishVideo } from '../src/upload.mjs'
 
 export const SETTING_DEFAULTS = {
+  username: process.env.TIKTOK_USERNAME || '',
+  maxVideos: 100,
   method: config.method,
   privacy: config.defaultPrivacy,
   browser: config.browser,
@@ -16,7 +19,7 @@ export const SETTING_DEFAULTS = {
   lastLoginAt: null,
 }
 
-// Cài đặt trên web ghi đè cấu hình .env cho các lần đăng sau
+// Cài đặt trên web ghi đè cấu hình .env cho các lần mở trình duyệt sau
 function applySettings(s) {
   Object.assign(config, {
     method: s.method,
@@ -27,23 +30,27 @@ function applySettings(s) {
   })
 }
 
-export function createPublisher(db) {
+export function createPublisher(store, settings) {
   return {
-    publish(video, settings) {
-      applySettings(settings)
+    publish(video, s) {
+      applySettings(s)
       return publishVideo({
-        file: db.filePath(video),
+        file: store.filePath(video),
         caption: video.caption,
-        privacy: video.privacy || settings.privacy,
+        privacy: video.privacy || s.privacy,
         mode: 'direct',
       })
     },
-    login(settings) {
-      applySettings(settings)
-      if (settings.method === 'api') {
+    login(s) {
+      applySettings(s)
+      if (s.method === 'api') {
         throw Object.assign(new Error('Chế độ API: chạy "node src/cli.mjs login --api" trong terminal để đăng nhập OAuth'), { status: 400 })
       }
       return browserLoginAuto()
+    },
+    fetchChannel(opts) {
+      applySettings(settings.get())
+      return fetchChannel(opts)
     },
   }
 }

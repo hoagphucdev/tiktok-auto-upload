@@ -9,11 +9,16 @@ export default function VideoEditor({ id, onClose }) {
   const [video, setVideo] = useState(null)
   const [form, setForm] = useState(null)
   const [settings, setSettings] = useState(null)
-  const [logs] = usePolling(() => api.logs({ videoId: id, limit: 50 }), 5000, [id, version])
+  // Lịch sử của video này trong nhật ký .txt hôm nay
+  const [logs] = usePolling(
+    () => api.logDays().then(({ today }) => api.logDay(today)).then((entries) => entries.filter((e) => e.target.includes(id))),
+    5000,
+    [id, version],
+  )
   const captionRef = useRef(null)
 
   useEffect(() => {
-    api.video(id).then((v) => {
+    api.pendingItem(id).then((v) => {
       setVideo(v)
       setForm({
         title: v.title,
@@ -56,17 +61,17 @@ export default function VideoEditor({ id, onClose }) {
     setForm((f) => ({ ...f, caption: `${before}${sep}${tags}${f.caption.slice(pos)}` }))
   }
 
-  const save = (extra, message) => run(() => api.updateVideo(id, payload(extra)), message).then(onClose)
+  const save = (extra, message) => run(() => api.updatePending(id, payload(extra)), message).then(onClose)
 
   async function publishNow() {
-    await run(() => api.updateVideo(id, payload()))
+    await run(() => api.updatePending(id, payload()))
     await run(() => api.publishNow(id), 'Đã đưa vào hàng đợi đăng ngay')
     onClose()
   }
 
   async function remove() {
-    if (!confirm('Xoá video này khỏi tool? (Không xoá trên TikTok)')) return
-    await run(() => api.deleteVideo(id), 'Đã xoá video')
+    if (!confirm('Xoá video này khỏi hàng chờ?')) return
+    await run(() => api.deletePending(id), 'Đã xoá khỏi hàng chờ')
     onClose()
   }
 
@@ -77,7 +82,7 @@ export default function VideoEditor({ id, onClose }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal editor" onClick={(e) => e.stopPropagation()}>
         <div className="editor-preview">
-          <video src={api.fileUrl(id)} controls playsInline />
+          <video src={api.pendingFileUrl(id)} controls playsInline />
           <dl className="facts">
             <dt>Trạng thái</dt>
             <dd>
@@ -89,12 +94,6 @@ export default function VideoEditor({ id, onClose }) {
             </dd>
             <dt>Tải lên</dt>
             <dd>{fmtDateTime(video.createdAt)}</dd>
-            {video.publishedAt && (
-              <>
-                <dt>Đã đăng</dt>
-                <dd>{fmtDateTime(video.publishedAt)}</dd>
-              </>
-            )}
             {video.attempts > 0 && (
               <>
                 <dt>Số lần đăng</dt>
@@ -103,7 +102,7 @@ export default function VideoEditor({ id, onClose }) {
             )}
           </dl>
           {video.lastError && <div className="callout danger">{video.lastError}</div>}
-          <h3>Lịch sử</h3>
+          <h3>Lịch sử hôm nay</h3>
           <LogList logs={logs} />
         </div>
 
@@ -115,18 +114,13 @@ export default function VideoEditor({ id, onClose }) {
           }}
         >
           <div className="editor-head">
-            <h2>Chỉnh sửa video</h2>
+            <h2>Video trong hàng chờ</h2>
             <button type="button" className="ghost icon" onClick={onClose} aria-label="Đóng">
               ✕
             </button>
           </div>
 
           {locked && <div className="callout">Video đang được đăng, tạm thời không sửa được.</div>}
-          {video.status === 'published' && (
-            <div className="callout">
-              Video đã đăng. Sửa ở đây chỉ đổi dữ liệu trong tool, không đổi bài trên TikTok. Có thể lên lịch lại để đăng lại.
-            </div>
-          )}
 
           <fieldset disabled={locked}>
             <label>

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { config } from './config.mjs'
 import { publishVideo, VIDEO_EXTS } from './upload.mjs'
+import { logAction } from './logger.mjs'
 
 /**
  * Cấu trúc thư mục queue:
@@ -41,6 +42,13 @@ function moveWithSidecars(file, destDir) {
 
 function log(entry) {
   fs.appendFileSync(path.join(config.queueDir, 'log.jsonl'), JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n')
+  const ok = entry.status === 'PUBLISH_COMPLETE' || entry.status === 'SEND_TO_USER_INBOX'
+  logAction({
+    level: ok ? 'success' : 'error',
+    actor: 'cli',
+    action: 'publish',
+    message: `${ok ? 'Đã đăng' : 'Đăng thất bại'} ${entry.file} (${entry.status}${entry.error ? `: ${entry.error}` : ''})`,
+  })
 }
 
 async function processOne({ file, meta }) {

@@ -553,6 +553,7 @@ nav a.active {
 .toolbar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 14px;
@@ -888,6 +889,241 @@ tr:last-child td {
   justify-content: flex-end;
 }
 
+
+/* ---------- Dữ liệu TikTok ---------- */
+img.brand-mark {
+  object-fit: cover;
+}
+.fetch-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 8px 8px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+.fetch-bar.error {
+  border-color: color-mix(in srgb, var(--failed) 50%, transparent);
+}
+.channel-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+.channel-info h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.channel-info p {
+  margin: 6px 0 0;
+}
+.channel-stats {
+  display: flex;
+  gap: 28px;
+}
+.channel-stats div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.channel-stats strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.channel-stats span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.mini-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.mini {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13px;
+  border-left: 3px solid var(--c, var(--border));
+}
+.mini.draft {
+  --c: var(--draft);
+}
+.mini.scheduled {
+  --c: var(--scheduled);
+}
+.mini.failed {
+  --c: var(--failed);
+}
+.mini strong {
+  font-size: 16px;
+}
+.mini .meter {
+  margin-top: 6px;
+}
+.row-with-cover {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  align-items: center;
+}
+.cover {
+  width: 44px;
+  height: 58px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--surface-2);
+  flex: none;
+  display: block;
+}
+.cover.fill {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+.video-table td {
+  vertical-align: middle;
+}
+.video-cell {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 260px;
+  max-width: 420px;
+}
+.chips.tight {
+  margin: 4px 0 0;
+}
+th.num,
+td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+td.strong {
+  font-weight: 700;
+}
+tr.clickable {
+  cursor: pointer;
+}
+tr.clickable:hover td {
+  background: var(--surface-2);
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.segmented button {
+  border: 0;
+  border-radius: 0;
+}
+.segmented button.active {
+  background: var(--surface-2);
+}
+.toolbar .actions select {
+  width: auto;
+}
+.thumb .duration {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  background: rgb(0 0 0 / 0.65);
+  color: #fff;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.tiktok-embed {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  max-height: 600px;
+  border: 0;
+  border-radius: 10px;
+  background: #000;
+  display: block;
+}
+.embed-placeholder {
+  position: relative;
+  aspect-ratio: 9 / 16;
+  max-height: 600px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  display: grid;
+  place-items: end center;
+}
+.embed-placeholder img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.5;
+}
+.embed-placeholder p {
+  position: relative;
+  color: #fff;
+  padding: 16px;
+  text-align: center;
+}
+.button.block {
+  width: 100%;
+  justify-content: center;
+  margin-top: 12px;
+}
+.caption-full {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0 0 16px;
+}
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.metric {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.metric span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.metric strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.break {
+  word-break: break-all;
+}
+h2 .small {
+  font-weight: 400;
+  margin-left: 8px;
+}
+
 /* ---------- Toasts ---------- */
 .toasts {
   position: fixed;
@@ -964,6 +1200,17 @@ tr:last-child td {
   }
   .hashtag-row {
     grid-template-columns: 1fr;
+  }
+  .channel-card {
+    grid-template-columns: auto 1fr;
+  }
+  .channel-stats {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .metric-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
   .video-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

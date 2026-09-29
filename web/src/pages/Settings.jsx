@@ -33,7 +33,21 @@ export default function Settings() {
 
       <form className="settings" onSubmit={save}>
         <section className="card">
-          <h2>Tài khoản TikTok</h2>
+          <h2>Kênh TikTok</h2>
+          <div className="grid-2">
+            <label>
+              Tên kênh (@username)
+              <input value={form.username} onChange={set('username')} placeholder="@ten_kenh" required />
+              <span className="muted small">Thông tin kênh và video được lấy trực tiếp từ trang này trên TikTok.</span>
+            </label>
+            <label>
+              Số video tối đa lấy về mỗi lần
+              <input type="number" min="1" max="500" value={form.maxVideos} onChange={set('maxVideos', Number)} />
+              <span className="muted small">Càng nhiều càng lâu (TikTok tải khoảng 30 video mỗi lần cuộn).</span>
+            </label>
+          </div>
+
+          <h3>Đăng nhập</h3>
           {form.method === 'browser' ? (
             <>
               <p className="muted">

@@ -33,9 +33,11 @@ export function LogList({ logs }) {
   if (!logs?.length) return <Empty>Chưa có hoạt động nào.</Empty>
   return (
     <ul className="log-list">
-      {logs.map((l) => (
-        <li key={l.id} className={`log ${l.level}`}>
-          <time>{fmtDateTime(l.at)}</time>
+      {logs.map((l, i) => (
+        <li key={`${l.at}-${i}`} className={`log ${l.level}`}>
+          <time>
+            {l.at} · {l.actor}
+          </time>
           <span>{l.message}</span>
         </li>
       ))}

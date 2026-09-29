@@ -3,15 +3,18 @@ import { AppContext } from './context.js'
 import { api } from './api.js'
 import { usePolling } from './util.js'
 import Dashboard from './pages/Dashboard.jsx'
-import Library from './pages/Library.jsx'
+import ChannelVideos from './pages/ChannelVideos.jsx'
+import Queue from './pages/Queue.jsx'
 import Calendar from './pages/Calendar.jsx'
 import Logs from './pages/Logs.jsx'
 import Settings from './pages/Settings.jsx'
 import VideoEditor from './components/VideoEditor.jsx'
+import TikTokVideoModal from './components/TikTokVideoModal.jsx'
 
 const PAGES = [
   { id: 'dashboard', label: 'Tổng quan', icon: '◧', Component: Dashboard },
-  { id: 'library', label: 'Thư viện video', icon: '▦', Component: Library },
+  { id: 'channel', label: 'Video trên kênh', icon: '▶', Component: ChannelVideos },
+  { id: 'queue', label: 'Hàng chờ đăng', icon: '▦', Component: Queue },
   { id: 'calendar', label: 'Lịch đăng', icon: '◷', Component: Calendar },
   { id: 'logs', label: 'Nhật ký', icon: '☰', Component: Logs },
   { id: 'settings', label: 'Cài đặt', icon: '⚙', Component: Settings },
@@ -28,12 +31,33 @@ function useHashRoute() {
   return route
 }
 
+/** Dữ liệu kênh lấy từ TikTok qua server; chỉ tải lại khi người dùng bấm "Làm mới" hoặc đổi kênh. */
+function useChannel(username) {
+  const [state, setState] = useState({ data: null, error: null, loading: false })
+  const load = useCallback(async (refresh = false) => {
+    setState((s) => ({ ...s, loading: true, error: null }))
+    try {
+      const data = await api.channel(refresh)
+      setState({ data, error: null, loading: false })
+    } catch (err) {
+      setState((s) => ({ ...s, error: err.message, loading: false }))
+    }
+  }, [])
+  useEffect(() => {
+    if (username) load()
+    else setState({ data: null, error: null, loading: false })
+  }, [username, load])
+  return { ...state, reload: load }
+}
+
 export default function App() {
   const route = useHashRoute()
   const [editingId, setEditingId] = useState(null)
+  const [tiktokId, setTiktokId] = useState(null)
   const [toasts, setToasts] = useState([])
   const [version, setVersion] = useState(0)
   const [stats, , reloadStats] = usePolling(api.stats, 5000)
+  const channel = useChannel(stats?.username)
 
   const toast = useCallback((message, kind = 'info') => {
     const id = Math.random()
@@ -66,14 +90,20 @@ export default function App() {
   const busy = stats?.busy
 
   return (
-    <AppContext.Provider value={{ toast, refresh, run, version, stats, openEditor: setEditingId }}>
+    <AppContext.Provider
+      value={{ toast, refresh, run, version, stats, channel, openEditor: setEditingId, openTikTok: setTiktokId }}
+    >
       <div className="layout">
         <aside className="sidebar">
           <div className="brand">
-            <span className="brand-mark" />
+            {channel.data?.user.avatar ? (
+              <img className="brand-mark" src={channel.data.user.avatar} alt="" referrerPolicy="no-referrer" />
+            ) : (
+              <span className="brand-mark" />
+            )}
             <div>
               <strong>TikTok Manager</strong>
-              <small>Quản lý nội dung kênh</small>
+              <small>{stats?.username ? `@${stats.username}` : 'Chưa chọn kênh'}</small>
             </div>
           </div>
           <nav>
@@ -81,19 +111,16 @@ export default function App() {
               <a key={p.id} href={`#/${p.id}`} className={p.id === page.id ? 'active' : ''}>
                 <span className="nav-icon">{p.icon}</span>
                 {p.label}
-                {p.id === 'library' && stats?.counts.failed > 0 && <span className="pill danger">{stats.counts.failed}</span>}
+                {p.id === 'queue' && stats?.counts.failed > 0 && <span className="pill danger">{stats.counts.failed}</span>}
               </a>
             ))}
           </nav>
           <div className="sidebar-status">
-            {busy ? (
-              <span className="dot pulse" />
-            ) : (
-              <span className={`dot ${stats?.paused ? 'off' : 'on'}`} />
-            )}
+            {busy ? <span className="dot pulse" /> : <span className={`dot ${stats?.paused ? 'off' : 'on'}`} />}
             <span>
               {busy?.kind === 'publish' && 'Đang đăng video…'}
               {busy?.kind === 'login' && 'Đang chờ đăng nhập…'}
+              {busy?.kind === 'fetch' && 'Đang lấy dữ liệu từ TikTok…'}
               {!busy && (stats?.paused ? 'Tự động đăng: tạm dừng' : 'Tự động đăng: đang bật')}
             </span>
           </div>
@@ -105,6 +132,7 @@ export default function App() {
       </div>
 
       {editingId && <VideoEditor id={editingId} onClose={() => setEditingId(null)} />}
+      {tiktokId && <TikTokVideoModal id={tiktokId} onClose={() => setTiktokId(null)} />}
 
       <div className="toasts">
         {toasts.map((t) => (
