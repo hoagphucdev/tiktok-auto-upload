@@ -6,3 +6,5 @@ errors/
 node_modules/
 data/
 web/dist/
+.wrangler/
+callback-worker/node_modules/

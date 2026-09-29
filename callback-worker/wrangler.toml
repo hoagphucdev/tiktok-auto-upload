@@ -1,0 +1,13 @@
+name = "tiktok-callback"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# KV để CLI tự nhận mã đăng nhập và để lưu sự kiện webhook.
+# Tạo bằng: npx wrangler kv namespace create TIKTOK_KV  → dán id vào dưới rồi bỏ dấu #
+# [[kv_namespaces]]
+# binding = "TIKTOK_KV"
+# id = "<id-in-ra-sau-khi-tao>"
+
+# Secrets (không ghi vào file này):
+#   npx wrangler secret put TIKTOK_CLIENT_SECRET
+#   npx wrangler secret put EVENTS_TOKEN

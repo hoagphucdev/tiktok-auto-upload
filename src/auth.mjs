@@ -74,14 +74,55 @@ function waitForCallback(redirect, state) {
   })
 }
 
-async function promptForCode(state) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-  const answer = (await rl.question('Dán URL bạn được chuyển tới sau khi đăng nhập (hoặc chỉ mã code): ')).trim()
-  rl.close()
+function codeFromAnswer(answer, state) {
+  answer = answer.trim()
   if (!answer.includes('code=')) return decodeURIComponent(answer)
   const params = new URL(answer).searchParams
   if (params.get('state') !== state) throw new Error('State không khớp, hãy thử lại.')
   return params.get('code')
+}
+
+/**
+ * Redirect URI là callback Worker (https): hỏi Worker mã theo `state` mỗi 2 giây.
+ * Worker không có KV / không hỗ trợ thì dừng hỏi, chỉ chờ người dùng dán URL.
+ */
+export async function pollWorker(redirect, state, signal) {
+  const pollUrl = new URL(`${redirect.pathname.replace(/\/$/, '')}/poll`, redirect.origin)
+  pollUrl.searchParams.set('state', state)
+  while (!signal.aborted) {
+    try {
+      const res = await fetch(pollUrl, { signal })
+      if (res.status === 200) return (await res.json()).code
+      if (res.status !== 202) return new Promise(() => {}) // không hỗ trợ → chờ dán tay
+    } catch {
+      if (signal.aborted) break
+    }
+    await new Promise((r) => setTimeout(r, 2000))
+  }
+  return new Promise(() => {})
+}
+
+async function promptForCode(redirect, state) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+  const ac = new AbortController()
+  try {
+    return await Promise.race([
+      pollWorker(redirect, state, ac.signal).then((code) => {
+        console.log('\nĐã nhận mã từ callback Worker.')
+        return code
+      }),
+      rl
+        .question('Đang chờ callback… (hoặc dán URL bạn được chuyển tới / mã code rồi Enter): ', { signal: ac.signal })
+        .then(
+          (answer) => codeFromAnswer(answer, state),
+          // Worker trả mã trước → câu hỏi bị huỷ, bỏ qua
+          (err) => (err.name === 'AbortError' ? new Promise(() => {}) : Promise.reject(err)),
+        ),
+    ])
+  } finally {
+    ac.abort()
+    rl.close()
+  }
 }
 
 export async function login() {
@@ -103,10 +144,12 @@ export async function login() {
   }
 
   console.log(`\nMở link sau trong trình duyệt để cấp quyền:\n\n${AUTHORIZE_URL}?${params}\n`)
+  console.log(`Redirect URI: ${config.redirectUri} · PKCE: ${config.usePkce ? 'bật' : 'tắt'} · Scope: ${config.scopes}`)
+  console.log('(Redirect URI phải khớp Y HỆT URI khai báo trong app TikTok)\n')
 
   const redirect = new URL(config.redirectUri)
   const isLocal = ['localhost', '127.0.0.1'].includes(redirect.hostname)
-  const code = isLocal ? await waitForCallback(redirect, state) : await promptForCode(state)
+  const code = isLocal ? await waitForCallback(redirect, state) : await promptForCode(redirect, state)
 
   const tokens = await tokenRequest({
     grant_type: 'authorization_code',
