@@ -14,7 +14,8 @@ Tool mở Chromium bằng Playwright và thao tác trên trang upload của TikT
 như bạn tự bấm tay. Bạn đăng nhập **một lần**, phiên đăng nhập được lưu trong `.browser-profile/`.
 
 ```bash
-cd tools/tiktok-uploader
+git clone https://github.com/hoagphucdev/tiktok-auto-upload
+cd tiktok-auto-upload
 npm run setup                     # cài Playwright + Chromium
 node src/cli.mjs login            # cửa sổ trình duyệt mở ra → đăng nhập TikTok → nhấn Enter ở terminal
 node src/cli.mjs upload ./video.mp4 -c "Gipsy Danger #robot #fyp" -p PUBLIC_TO_EVERYONE
@@ -99,7 +100,7 @@ node src/cli.mjs watch --interval 120      # chạy nền, mỗi 2 tiếng đăn
 Muốn chạy định kỳ bằng cron thay cho `watch`:
 
 ```cron
-0 */3 * * * cd /path/to/tools/tiktok-uploader && node src/cli.mjs queue --max 1 >> cron.log 2>&1
+0 */3 * * * cd /path/to/tiktok-auto-upload && node src/cli.mjs queue --max 1 >> cron.log 2>&1
 ```
 
 ## Giới hạn của TikTok (chế độ API)

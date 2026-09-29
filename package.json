@@ -1,11 +1,11 @@
 {
-  "name": "tiktok-uploader",
+  "name": "tiktok-auto-upload",
   "private": true,
   "version": "0.1.0",
   "description": "Auto upload video lên TikTok (trình duyệt hoặc Content Posting API)",
   "type": "module",
   "bin": {
-    "tiktok-uploader": "src/cli.mjs"
+    "tiktok-auto-upload": "src/cli.mjs"
   },
   "engines": {
     "node": ">=20"
