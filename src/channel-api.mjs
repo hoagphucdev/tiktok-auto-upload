@@ -92,7 +92,12 @@ export async function fetchChannelApi({ maxVideos = 100 } = {}) {
     },
   }
 
-  if (!scopes.has('video.list')) throw scopeError('video.list', 'đọc danh sách video')
+  const warnings = []
+  if (!scopes.has('user.info.stats')) warnings.push('Thiếu scope user.info.stats nên không có số người theo dõi / lượt thích.')
+  if (!scopes.has('video.list')) {
+    warnings.push('Thiếu scope video.list nên không đọc được danh sách video.')
+    return { user, videos: [], complete: true, source: 'api', warnings, fetchedAt: new Date().toISOString() }
+  }
   const videos = []
   let cursor
   let hasMore = true
@@ -103,5 +108,5 @@ export async function fetchChannelApi({ maxVideos = 100 } = {}) {
     cursor = page.cursor
   }
 
-  return { user, videos, complete: !hasMore, source: 'api', fetchedAt: new Date().toISOString() }
+  return { user, videos, complete: !hasMore, source: 'api', warnings, fetchedAt: new Date().toISOString() }
 }

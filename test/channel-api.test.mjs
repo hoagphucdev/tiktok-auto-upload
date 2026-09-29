@@ -74,9 +74,14 @@ test('fetchChannelApi: đọc tài khoản + phân trang video, chỉ xin trư�
 })
 
 test('fetchChannelApi: thiếu scope thì báo rõ, không gửi trường bị cấm', async () => {
-  writeTokens('user.info.basic')
+  writeTokens('user.info.basic,video.upload')
   const calls = mockFetch()
-  await assert.rejects(fetchChannelApi(), /video\.list/)
+  const data = await fetchChannelApi()
+  assert.equal(data.user.nickname, 'Demo')
+  assert.deepEqual(data.videos, [])
+  assert.ok(data.warnings.some((w) => w.includes('video.list')))
+  assert.ok(data.warnings.some((w) => w.includes('user.info.stats')))
+  assert.equal(calls.filter((c) => c.url.includes('/video/list/')).length, 0)
   const fields = new URL(calls[0].url).searchParams.get('fields').split(',')
   assert.ok(!fields.includes('follower_count'))
   assert.ok(!fields.includes('username'))

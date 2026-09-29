@@ -27,6 +27,12 @@ export default function ChannelState() {
             {!data.complete && ` · mới lấy ${data.videos.length}${data.user.stats.videos != null ? `/${data.user.stats.videos}` : ''} video (tăng giới hạn trong Cài đặt)`}
           </>
         )}
+        {data?.warnings?.map((w) => (
+          <span key={w} className="danger-text">
+            {' '}
+            ⚠ {w}
+          </span>
+        ))}
         {error && <span className="danger-text"> {error}</span>}
       </span>
       <button onClick={() => reload(true)} disabled={loading}>

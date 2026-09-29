@@ -62,14 +62,18 @@ async function main() {
       return config.method === 'api' ? login() : browserLogin()
     case 'whoami': {
       const token = await getAccessToken()
-      const { user, videos, error } = await fetchChannelApi({ maxVideos: 5 }).catch((err) => ({ error: err.message }))
+      const { user, videos, warnings = [], error } = await fetchChannelApi({ maxVideos: 5 }).catch((err) => ({ error: err.message }))
       if (error) console.log(`Thông tin kênh: ${error}`)
+      for (const w of warnings) console.log(`⚠ ${w}`)
       if (user) {
         console.log(`Tài khoản: ${user.nickname}${user.username ? ` (@${user.username})` : ''}`)
         console.log(`Người theo dõi: ${user.stats.followers ?? '?'} · Lượt thích: ${user.stats.likes ?? '?'} · Video: ${user.stats.videos ?? '?'}`)
         for (const v of videos) console.log(`  - ${v.createdAt?.slice(0, 10)} ▶ ${v.stats.views} ♥ ${v.stats.likes}  ${v.caption.slice(0, 60)}`)
       }
-      console.log('Quyền đăng bài:', await queryCreatorInfo(token).catch((err) => err.message))
+      const creator = await queryCreatorInfo(token).catch((err) =>
+        err.code === 'scope_not_authorized' ? 'chưa có scope video.publish (chỉ gửi vào nháp được: upload --draft)' : err.message,
+      )
+      console.log('Quyền đăng thẳng:', creator)
       return
     }
     case 'status':
