@@ -1,12 +1,58 @@
-# TikTok Auto Uploader
+# TikTok Auto Upload
 
-CLI Node.js tự động đăng video lên TikTok: đăng 1 video, đăng hàng loạt từ thư mục, đăng theo chu
-kỳ và hẹn giờ. Có 2 cách chạy:
+Tự động đăng và quản lý nội dung kênh TikTok. Gồm:
+
+- **Web app quản lý** (`npm start`): thư viện video, soạn caption, lên lịch, lịch tuần, nhật ký,
+  tự động đăng theo nhịp bạn đặt.
+- **CLI** (`node src/cli.mjs …`): đăng nhanh từ terminal hoặc chạy bằng cron.
+
+Có 2 cách đăng lên TikTok:
 
 | Cách | Cần key? | Ưu điểm | Nhược điểm |
 |---|---|---|---|
 | **browser** (mặc định) | Không | Cài là chạy, đăng công khai được ngay | Phụ thuộc giao diện TikTok Studio, TikTok đổi giao diện thì có thể phải sửa selector |
-| **api** (`--api`) | Có | Ổn định, chính thức | Phải tạo app; app chưa audit chỉ đăng được video riêng tư |
+| **api** | Có | Ổn định, chính thức | Phải tạo app; app chưa audit chỉ đăng được video riêng tư |
+
+## Web app quản lý kênh
+
+```bash
+git clone https://github.com/hoagphucdev/tiktok-auto-upload
+cd tiktok-auto-upload
+npm run setup      # cài thư viện + Chromium + build giao diện
+npm start          # mở http://127.0.0.1:8787
+```
+
+Lần đầu vào **Cài đặt → Đăng nhập TikTok**: một cửa sổ trình duyệt mở ra, bạn đăng nhập, tool tự
+nhận biết và đóng cửa sổ. (Hoặc điền CDP URL để dùng tab Brave đang mở sẵn, xem phần Brave bên dưới.)
+
+| Trang | Làm được gì |
+|---|---|
+| **Tổng quan** | Số video theo trạng thái, số bài hôm nay / giới hạn, video sắp đăng, hoạt động gần đây, nút tạm dừng tự động đăng |
+| **Thư viện video** | Kéo thả nhiều video để tải lên (vào mục Nháp), lọc theo trạng thái, tìm kiếm, chọn nhiều để lên lịch hàng loạt / chuyển về nháp / xoá |
+| **Sửa video** | Xem video, sửa caption (đếm ký tự, hiện hashtag), chèn nhanh bộ hashtag, chọn ai được xem, hẹn giờ, tag nội bộ, ghi chú, lịch sử; nút Lên lịch / Đăng ngay / Thử lại |
+| **Lịch đăng** | Xem theo tuần các video đã lên lịch và đã đăng |
+| **Nhật ký** | Mọi hoạt động và lỗi, lọc theo mức |
+| **Cài đặt** | Đăng nhập TikTok, cách đăng (browser/API), trình duyệt (Chromium/Brave/CDP), khoảng cách giữa 2 bài, số bài tối đa/ngày, bộ hashtag |
+
+Cách bộ lập lịch chạy:
+
+- Server kiểm tra mỗi 20 giây, mỗi lần đăng **tối đa 1** video đã tới giờ hẹn.
+- Tôn trọng **khoảng cách tối thiểu** giữa 2 bài và **số bài tối đa mỗi ngày**. Nút **Đăng ngay**
+  bỏ qua hai giới hạn này.
+- Đăng lỗi → video sang trạng thái **Lỗi** kèm lý do (và ảnh chụp màn hình trong `errors/` ở chế độ
+  browser); bấm **Thử lại** khi đã xử lý. Nếu TikTok báo giới hạn tần suất, video tự lùi lịch 15 phút.
+- **Server phải đang chạy** thì mới tự đăng được. Nếu tắt máy lúc tới giờ, video sẽ được đăng khi
+  bạn bật lại server.
+
+Dữ liệu (video đã tải lên + `db.json`) nằm trong `data/`. Sao lưu thư mục này là đủ.
+
+Truy cập từ điện thoại cùng mạng Wi-Fi: đặt `HOST=0.0.0.0` và `ADMIN_PASSWORD=...` trong `.env`, rồi
+vào `http://<IP máy tính>:8787`.
+
+Phát triển giao diện (tự reload): chạy `npm run dev:server` và `npm run dev:web` ở 2 terminal, rồi
+mở http://localhost:5173.
+
+# CLI
 
 ## 1. Cách không cần key (trình duyệt)
 

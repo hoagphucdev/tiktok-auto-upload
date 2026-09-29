@@ -2,7 +2,7 @@
   "name": "tiktok-auto-upload",
   "private": true,
   "version": "0.1.0",
-  "description": "Auto upload video lên TikTok (trình duyệt hoặc Content Posting API)",
+  "description": "Tự động đăng & quản lý nội dung kênh TikTok (web app + CLI)",
   "type": "module",
   "bin": {
     "tiktok-auto-upload": "src/cli.mjs"
@@ -11,7 +11,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "setup": "npm install && npx playwright install chromium",
+    "setup": "npm install && npx playwright install chromium && npm run build",
+    "build": "vite build",
+    "start": "node server/index.mjs",
+    "dev:server": "node --watch server/index.mjs",
+    "dev:web": "vite",
     "login": "node src/cli.mjs login",
     "whoami": "node src/cli.mjs whoami",
     "upload": "node src/cli.mjs upload",
@@ -20,6 +24,14 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "playwright": "^1.63.0"
+    "express": "^5.2.1",
+    "multer": "^2.4.0",
+    "playwright": "^1.63.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.2.0",
+    "vite": "^7.3.6"
   }
 }

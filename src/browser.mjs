@@ -95,6 +95,25 @@ export async function browserLogin() {
   if (!config.cdpUrl) console.log(`Đã lưu phiên đăng nhập vào ${config.profileDir}`)
 }
 
+/**
+ * Đăng nhập không cần terminal (dùng cho web app): mở trang đăng nhập và tự đóng khi thấy
+ * cookie phiên TikTok (sessionid) xuất hiện.
+ */
+export async function browserLoginAuto({ timeoutMs = 10 * 60_000 } = {}) {
+  const { page, close } = await launch({ headless: false })
+  try {
+    await page.goto(LOGIN_URL)
+    await waitUntil(
+      async () => (await page.context().cookies('https://www.tiktok.com')).some((c) => c.name === 'sessionid' && c.value),
+      timeoutMs,
+      'Hết thời gian chờ đăng nhập TikTok',
+    )
+    await sleep(2000)
+  } finally {
+    await close()
+  }
+}
+
 async function typeCaption(page, caption) {
   const editor = page.locator('div[contenteditable="true"]').first()
   await editor.waitFor({ timeout: 60_000 })
