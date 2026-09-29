@@ -1,6 +1,7 @@
 import { config } from '../src/config.mjs'
 import { browserLoginAuto } from '../src/browser.mjs'
 import { fetchChannel } from '../src/channel.mjs'
+import { fetchChannelApi } from '../src/channel-api.mjs'
 import { publishVideo } from '../src/upload.mjs'
 
 export const SETTING_DEFAULTS = {
@@ -48,9 +49,11 @@ export function createPublisher(store, settings) {
       }
       return browserLoginAuto()
     },
+    // Chế độ API: Display API chính thức (không captcha). Chế độ trình duyệt: đọc trang kênh.
     fetchChannel(opts) {
-      applySettings(settings.get())
-      return fetchChannel(opts)
+      const s = settings.get()
+      applySettings(s)
+      return s.method === 'api' ? fetchChannelApi(opts) : fetchChannel(opts)
     },
   }
 }

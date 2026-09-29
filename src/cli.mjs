@@ -7,6 +7,7 @@ import { fetchPublishStatus, queryCreatorInfo } from './api.mjs'
 import { publishVideo } from './upload.mjs'
 import { runQueue, watchQueue } from './queue.mjs'
 import { logAction } from './logger.mjs'
+import { fetchChannelApi } from './channel-api.mjs'
 
 const HELP = `
 TikTok auto uploader
@@ -59,8 +60,18 @@ async function main() {
   switch (command) {
     case 'login':
       return config.method === 'api' ? login() : browserLogin()
-    case 'whoami':
-      return console.log(await queryCreatorInfo(await getAccessToken()))
+    case 'whoami': {
+      const token = await getAccessToken()
+      const { user, videos, error } = await fetchChannelApi({ maxVideos: 5 }).catch((err) => ({ error: err.message }))
+      if (error) console.log(`Thông tin kênh: ${error}`)
+      if (user) {
+        console.log(`Tài khoản: ${user.nickname}${user.username ? ` (@${user.username})` : ''}`)
+        console.log(`Người theo dõi: ${user.stats.followers ?? '?'} · Lượt thích: ${user.stats.likes ?? '?'} · Video: ${user.stats.videos ?? '?'}`)
+        for (const v of videos) console.log(`  - ${v.createdAt?.slice(0, 10)} ▶ ${v.stats.views} ♥ ${v.stats.likes}  ${v.caption.slice(0, 60)}`)
+      }
+      console.log('Quyền đăng bài:', await queryCreatorInfo(token).catch((err) => err.message))
+      return
+    }
     case 'status':
       if (!arg) throw new Error('Thiếu publish_id')
       return console.log(await fetchPublishStatus(await getAccessToken(), arg))

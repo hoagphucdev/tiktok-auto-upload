@@ -9,18 +9,21 @@ export function createChannelCache({ fetchChannel, lock, getSettings, ttlMs = 5 
   let inflight = null
   let lastError = null
 
+  // Đổi kênh hoặc đổi nguồn (API/trình duyệt) thì cache cũ không còn dùng được
+  const keyOf = (s) => `${s.method}:${s.username}`
+
   async function load() {
     const settings = getSettings()
     lock.busy = { kind: 'fetch' }
     try {
       const data = await fetchChannel({ username: settings.username, maxVideos: settings.maxVideos })
-      cache = { data, username: settings.username, at: Date.now() }
+      cache = { data, key: keyOf(settings), at: Date.now() }
       lastError = null
       logAction({
         level: 'success',
         actor: 'system',
         action: 'fetch',
-        message: `Lấy dữ liệu kênh @${data.user.username} từ TikTok: ${data.user.stats.followers} người theo dõi, ${data.videos.length}/${data.user.stats.videos} video`,
+        message: `Lấy dữ liệu kênh @${data.user.username || data.user.nickname} từ TikTok${data.source === 'api' ? ' (API)' : ''}: ${data.user.stats.followers} người theo dõi, ${data.videos.length}/${data.user.stats.videos} video`,
       })
       return data
     } catch (err) {
@@ -38,12 +41,12 @@ export function createChannelCache({ fetchChannel, lock, getSettings, ttlMs = 5 
      * cache cũ (đánh dấu stale) thay vì chờ.
      */
     async get({ refresh = false } = {}) {
-      const username = getSettings().username
-      const fresh = cache && cache.username === username && Date.now() - cache.at < ttlMs
+      const key = keyOf(getSettings())
+      const fresh = cache && cache.key === key && Date.now() - cache.at < ttlMs
       if (fresh && !refresh) return { ...cache.data, cached: true }
       if (inflight) return inflight
       if (lock.busy) {
-        if (cache && cache.username === username) return { ...cache.data, cached: true, stale: true }
+        if (cache && cache.key === key) return { ...cache.data, cached: true, stale: true }
         throw Object.assign(new Error('Trình duyệt đang bận (đang đăng bài hoặc đăng nhập), thử lại sau ít phút'), { status: 409 })
       }
       inflight = load().finally(() => {

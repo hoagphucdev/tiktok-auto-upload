@@ -37,8 +37,12 @@ export default function Settings() {
           <div className="grid-2">
             <label>
               Tên kênh (@username)
-              <input value={form.username} onChange={set('username')} placeholder="@ten_kenh" required />
-              <span className="muted small">Thông tin kênh và video được lấy trực tiếp từ trang này trên TikTok.</span>
+              <input value={form.username} onChange={set('username')} placeholder="@ten_kenh" required={form.method !== 'api'} />
+              <span className="muted small">
+                {form.method === 'api'
+                  ? 'Chế độ API: dữ liệu lấy qua API chính thức theo tài khoản đã đăng nhập, không cần điền.'
+                  : 'Thông tin kênh và video được lấy trực tiếp từ trang này trên TikTok.'}
+              </span>
             </label>
             <label>
               Số video tối đa lấy về mỗi lần

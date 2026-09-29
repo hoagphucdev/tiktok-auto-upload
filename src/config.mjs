@@ -32,7 +32,7 @@ export const config = {
   clientSecret: env('TIKTOK_CLIENT_SECRET', ''),
   redirectUri: env('TIKTOK_REDIRECT_URI', 'http://localhost:3455/callback'),
   usePkce: env('TIKTOK_USE_PKCE', '0') === '1',
-  scopes: env('TIKTOK_SCOPES', 'user.info.basic,video.publish,video.upload'),
+  scopes: env('TIKTOK_SCOPES', 'user.info.basic,user.info.profile,user.info.stats,video.list,video.publish,video.upload'),
   defaultPrivacy: env('DEFAULT_PRIVACY', 'SELF_ONLY'),
   defaultMode: env('DEFAULT_MODE', 'direct'),
   tokenFile: resolve(env('TOKEN_FILE', '.tokens.json')),

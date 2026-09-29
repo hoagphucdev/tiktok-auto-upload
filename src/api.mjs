@@ -8,19 +8,20 @@ export class TikTokApiError extends Error {
   }
 }
 
-async function post(path, token, body = {}) {
+async function request(method, path, token, body) {
   const res = await fetch(`${API}${path}`, {
-    method: 'POST',
+    method,
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json; charset=UTF-8',
+      ...(body && { 'Content-Type': 'application/json; charset=UTF-8' }),
     },
-    body: JSON.stringify(body),
+    body: body && JSON.stringify(body),
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok || (json.error && json.error.code !== 'ok')) throw new TikTokApiError(json.error, res.status)
   return json.data
 }
+const post = (path, token, body = {}) => request('POST', path, token, body)
 
 export const queryCreatorInfo = (token) => post('/post/publish/creator_info/query/', token)
 
@@ -32,3 +33,9 @@ export const initInboxUpload = (token, sourceInfo) =>
 
 export const fetchPublishStatus = (token, publishId) =>
   post('/post/publish/status/fetch/', token, { publish_id: publishId })
+
+// ---------- Display API: thông tin tài khoản & danh sách video ----------
+export const getUserInfo = (token, fields) => request('GET', `/user/info/?fields=${fields.join(',')}`, token)
+
+export const listVideos = (token, fields, { cursor, maxCount = 20 } = {}) =>
+  post(`/video/list/?fields=${fields.join(',')}`, token, { max_count: maxCount, ...(cursor && { cursor }) })

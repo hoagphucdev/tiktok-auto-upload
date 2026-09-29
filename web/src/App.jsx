@@ -32,7 +32,9 @@ function useHashRoute() {
 }
 
 /** Dữ liệu kênh lấy từ TikTok qua server; chỉ tải lại khi người dùng bấm "Làm mới" hoặc đổi kênh. */
-function useChannel(username) {
+function useChannel(stats) {
+  // Chế độ API không cần tên kênh; chế độ trình duyệt thì cần
+  const key = stats && (stats.method === 'api' || stats.username) ? `${stats.method}:${stats.username}` : ''
   const [state, setState] = useState({ data: null, error: null, loading: false })
   const load = useCallback(async (refresh = false) => {
     setState((s) => ({ ...s, loading: true, error: null }))
@@ -44,9 +46,9 @@ function useChannel(username) {
     }
   }, [])
   useEffect(() => {
-    if (username) load()
+    if (key) load()
     else setState({ data: null, error: null, loading: false })
-  }, [username, load])
+  }, [key, load])
   return { ...state, reload: load }
 }
 
@@ -57,7 +59,7 @@ export default function App() {
   const [toasts, setToasts] = useState([])
   const [version, setVersion] = useState(0)
   const [stats, , reloadStats] = usePolling(api.stats, 5000)
-  const channel = useChannel(stats?.username)
+  const channel = useChannel(stats)
 
   const toast = useCallback((message, kind = 'info') => {
     const id = Math.random()
@@ -103,7 +105,7 @@ export default function App() {
             )}
             <div>
               <strong>TikTok Manager</strong>
-              <small>{stats?.username ? `@${stats.username}` : 'Chưa chọn kênh'}</small>
+              <small>{channel.data?.user.username ? `@${channel.data.user.username}` : stats?.username ? `@${stats.username}` : channel.data?.user.nickname || 'Chưa chọn kênh'}</small>
             </div>
           </div>
           <nav>

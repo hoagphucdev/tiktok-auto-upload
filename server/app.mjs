@@ -311,7 +311,7 @@ export function createApp({ store, settings, channel, scheduler, publisher, lock
     }
     const others = changed.filter((k) => k !== 'paused')
     if (others.length) audit(req, 'settings', `Đổi cài đặt: ${others.join(', ')}`)
-    if (changed.includes('username')) channel.invalidate()
+    if (changed.includes('username') || changed.includes('method')) channel.invalidate()
     res.json(saved)
   })
 

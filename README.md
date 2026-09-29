@@ -151,25 +151,36 @@ lần đầu bạn vẫn chạy `node src/cli.mjs login` để đăng nhập Tik
 > ⚠️ Khi cổng 9222 đang mở, mọi chương trình trên máy bạn đều điều khiển được cửa sổ Brave đó.
 > Chỉ dùng profile riêng này cho TikTok, và đóng Brave khi không cần chạy tool.
 
-## 2. Cách dùng API chính thức (cần key)
+## 2. Cách dùng API chính thức (cần key) — không bị captcha
 
-1. Vào https://developers.tiktok.com → **Manage apps** → tạo app.
-2. Thêm product **Login Kit** và **Content Posting API** (bật *Direct Post* nếu muốn đăng thẳng).
-3. Scopes: `user.info.basic`, `video.upload`, `video.publish`.
-4. Khai báo **Redirect URI**, ví dụ `http://localhost:3455/callback` (app dạng Desktop) hoặc URL
-   https của bạn (app dạng Web).
-5. Lấy **Client key** và **Client secret**.
+**Trên developers.tiktok.com (app của bạn):**
 
-> ⚠️ App **chưa được TikTok audit** chỉ đăng được video ở chế độ `SELF_ONLY` (riêng tư), và chỉ
-> cho các tài khoản đã thêm vào mục *Sandbox / Target users*.
+1. Thêm product **Login Kit**, **Display API** và **Content Posting API** (bật *Direct Post*).
+2. Bật các scope: `user.info.basic`, `user.info.profile`, `user.info.stats`, `video.list`,
+   `video.publish`, `video.upload`.
+3. Khai báo **Redirect URI** khớp với `TIKTOK_REDIRECT_URI` trong `.env`. Với app loại **Desktop**,
+   dùng `http://localhost:3455/callback` và đặt `TIKTOK_USE_PKCE=1`. Với app loại **Web**, TikTok
+   bắt buộc URL https, tool sẽ hỏi bạn dán lại URL sau khi đăng nhập.
+4. App **chưa được audit**: thêm tài khoản TikTok của bạn vào *Sandbox / Target users*; video chỉ
+   đăng được ở chế độ `SELF_ONLY` (riêng tư) cho tới khi app được duyệt.
+
+**Trên máy:**
 
 ```bash
-cp .env.example .env      # đặt UPLOAD_METHOD=api, điền TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, TIKTOK_REDIRECT_URI
-node src/cli.mjs login    # mở link in ra, cấp quyền → token lưu vào .tokens.json
-node src/cli.mjs whoami   # kiểm tra tài khoản & các mức privacy được phép
+# .env: UPLOAD_METHOD=api, TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, TIKTOK_REDIRECT_URI (+ TIKTOK_USE_PKCE)
+node src/cli.mjs login --api   # mở link in ra → cấp quyền → token lưu vào .tokens.json
+node src/cli.mjs whoami        # in thông tin kênh, 5 video gần nhất và quyền đăng bài
 ```
 
-Token tự refresh (access token sống 24h, refresh token sống 365 ngày).
+Trong web app: **Cài đặt → Phương thức → Content Posting API**, bấm Lưu. Từ đó thông tin kênh và
+danh sách video lấy qua **Display API** (nhanh, không mở trình duyệt, không captcha), và đăng bài
+qua Content Posting API.
+
+Giới hạn của Display API: chỉ trả **video công khai**, không có số lượt **lưu**, trạng thái ghim
+và nhạc nền. Nếu thiếu scope, tool báo rõ scope nào cần thêm.
+
+Token tự refresh (access token sống 24h, refresh token sống 365 ngày). Muốn cấp thêm scope thì
+chạy lại `login --api`.
 
 ## 3. Đăng 1 video
 
