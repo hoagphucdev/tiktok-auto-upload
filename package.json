@@ -2,7 +2,7 @@
   "name": "tiktok-uploader",
   "private": true,
   "version": "0.1.0",
-  "description": "Auto upload video lên TikTok qua Content Posting API chính thức",
+  "description": "Auto upload video lên TikTok (trình duyệt hoặc Content Posting API)",
   "type": "module",
   "bin": {
     "tiktok-uploader": "src/cli.mjs"
@@ -11,11 +11,15 @@
     "node": ">=20"
   },
   "scripts": {
+    "setup": "npm install && npx playwright install chromium",
     "login": "node src/cli.mjs login",
     "whoami": "node src/cli.mjs whoami",
     "upload": "node src/cli.mjs upload",
     "queue": "node src/cli.mjs queue",
     "watch": "node src/cli.mjs watch",
     "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
   }
 }

@@ -19,6 +19,11 @@ const env = (key, fallback) => process.env[key] || fallback
 const resolve = (p) => path.resolve(ROOT, p)
 
 export const config = {
+  // browser = điều khiển trình duyệt, không cần key; api = Content Posting API chính thức
+  method: env('UPLOAD_METHOD', 'browser'),
+  profileDir: resolve(env('BROWSER_PROFILE_DIR', '.browser-profile')),
+  headless: env('HEADLESS', '0') === '1',
+  chromiumPath: env('CHROMIUM_PATH', ''),
   clientKey: env('TIKTOK_CLIENT_KEY', ''),
   clientSecret: env('TIKTOK_CLIENT_SECRET', ''),
   redirectUri: env('TIKTOK_REDIRECT_URI', 'http://localhost:3455/callback'),

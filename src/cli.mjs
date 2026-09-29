@@ -2,6 +2,7 @@
 import { parseArgs } from 'node:util'
 import { config } from './config.mjs'
 import { getAccessToken, login } from './auth.mjs'
+import { browserLogin } from './browser.mjs'
 import { fetchPublishStatus, queryCreatorInfo } from './api.mjs'
 import { publishVideo } from './upload.mjs'
 import { runQueue, watchQueue } from './queue.mjs'
@@ -10,22 +11,25 @@ const HELP = `
 TikTok auto uploader
 
 Cách dùng:
-  node src/cli.mjs login                     Đăng nhập TikTok (OAuth), lưu token
-  node src/cli.mjs whoami                    Xem thông tin tài khoản & quyền đăng
+  node src/cli.mjs login                     Đăng nhập TikTok (mở trình duyệt, hoặc OAuth nếu --api)
+  node src/cli.mjs whoami                    [API] Xem thông tin tài khoản & quyền đăng
   node src/cli.mjs upload <file> [options]   Upload 1 video
   node src/cli.mjs queue [--max N] [--gap S] Upload các video trong thư mục queue
   node src/cli.mjs watch [--interval MIN]    Chạy liên tục, mỗi MIN phút đăng 1 video
-  node src/cli.mjs status <publish_id>       Kiểm tra trạng thái 1 lần đăng
+  node src/cli.mjs status <publish_id>       [API] Kiểm tra trạng thái 1 lần đăng
+
+Mặc định dùng trình duyệt (không cần key). Thêm --api để dùng Content Posting API.
 
 Options cho upload:
   -c, --caption <text>     Caption + hashtag
   -p, --privacy <level>    PUBLIC_TO_EVERYONE | MUTUAL_FOLLOW_FRIENDS | FOLLOWER_OF_CREATOR | SELF_ONLY
-      --draft              Gửi vào nháp (inbox) thay vì đăng thẳng
-      --no-comment         Tắt bình luận
-      --no-duet            Tắt duet
-      --no-stitch          Tắt stitch
-      --cover-ms <ms>      Frame làm ảnh bìa (mili giây)
-      --no-wait            Không chờ TikTok xử lý xong
+      --draft              [API] Gửi vào nháp (inbox) thay vì đăng thẳng
+      --no-comment         [API] Tắt bình luận
+      --no-duet            [API] Tắt duet
+      --no-stitch          [API] Tắt stitch
+      --cover-ms <ms>      [API] Frame làm ảnh bìa (mili giây)
+      --no-wait            [API] Không chờ TikTok xử lý xong
+      --api                Dùng Content Posting API thay cho trình duyệt
 `
 
 const { positionals, values } = parseArgs({
@@ -42,16 +46,18 @@ const { positionals, values } = parseArgs({
     max: { type: 'string' },
     gap: { type: 'string', default: '30' },
     interval: { type: 'string' },
+    api: { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false },
   },
 })
 
 const [command, arg] = positionals
+if (values.api) config.method = 'api'
 
 async function main() {
   switch (command) {
     case 'login':
-      return login()
+      return config.method === 'api' ? login() : browserLogin()
     case 'whoami':
       return console.log(await queryCreatorInfo(await getAccessToken()))
     case 'status':

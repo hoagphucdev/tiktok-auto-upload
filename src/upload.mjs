@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { getAccessToken } from './auth.mjs'
+import { browserPublish } from './browser.mjs'
+import { config } from './config.mjs'
 import { fetchPublishStatus, initDirectPost, initInboxUpload, queryCreatorInfo } from './api.mjs'
 
 const MB = 1024 * 1024
@@ -97,11 +99,17 @@ export async function publishVideo({
   disableStitch = false,
   coverMs,
   wait = true,
+  method = config.method,
 }) {
   if (!VIDEO_EXTS.includes(path.extname(file).toLowerCase())) {
     throw new Error(`Định dạng không hỗ trợ: ${file} (chỉ ${VIDEO_EXTS.join(', ')})`)
   }
   if (caption.length > MAX_CAPTION) throw new Error(`Caption dài ${caption.length} ký tự, tối đa ${MAX_CAPTION}`)
+
+  if (method === 'browser') {
+    if (mode === 'inbox') throw new Error('Chế độ nháp (--draft) chỉ có khi dùng API')
+    return browserPublish({ file, caption, privacy })
+  }
 
   const size = (await fs.promises.stat(file)).size
   const plan = planChunks(size)

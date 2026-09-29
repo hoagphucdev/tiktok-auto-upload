@@ -1,3 +1,6 @@
 .env
 .tokens.json
 queue/
+.browser-profile/
+errors/
+node_modules/
