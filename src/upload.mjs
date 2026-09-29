@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { getAccessToken } from './auth.mjs'
+import { getAccessToken, loadTokens } from './auth.mjs'
 import { browserPublish } from './browser.mjs'
 import { config } from './config.mjs'
 import { fetchPublishStatus, initDirectPost, initInboxUpload, queryCreatorInfo } from './api.mjs'
@@ -121,6 +121,13 @@ export async function publishVideo({
   }
   const token = await getAccessToken()
 
+  // Chưa bật Direct Post (token không có video.publish) → chỉ gửi được vào hộp nháp TikTok
+  const scopes = String(loadTokens()?.scope || '').split(/[,\s]+/)
+  if (mode === 'direct' && !scopes.includes('video.publish')) {
+    console.warn('⚠ Token không có quyền video.publish → gửi vào hộp nháp TikTok (mở app TikTok để soạn caption và bấm Đăng).')
+    mode = 'inbox'
+  }
+
   let init
   if (mode === 'inbox') {
     init = await initInboxUpload(token, sourceInfo)
@@ -148,7 +155,7 @@ export async function publishVideo({
   console.log(`→ ${path.basename(file)} (${(size / MB).toFixed(1)}MB, ${plan.count} chunk) publish_id=${init.publish_id}`)
   await uploadFile(init.upload_url, file, size, plan)
 
-  if (!wait) return { publish_id: init.publish_id, status: 'UPLOADED' }
+  if (!wait) return { publish_id: init.publish_id, mode, status: 'UPLOADED' }
   const status = await waitForPublish(token, init.publish_id)
-  return { publish_id: init.publish_id, ...status }
+  return { publish_id: init.publish_id, mode, ...status }
 }

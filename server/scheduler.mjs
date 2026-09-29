@@ -80,7 +80,14 @@ export function createScheduler({ store, getSettings, publish, lock, onPublished
       }
       // Đã lên TikTok: bỏ khỏi hàng chờ, từ giờ thông tin lấy từ TikTok
       store.deleteVideo(video.id)
-      log('success', 'publish', `Đã đăng ${name(video)} lên TikTok (quyền xem: ${video.privacy})`, video.caption.slice(0, 80))
+      log(
+        'success',
+        'publish',
+        result?.mode === 'inbox'
+          ? `Đã gửi ${name(video)} vào hộp nháp TikTok — mở app TikTok, dán caption và bấm Đăng`
+          : `Đã đăng ${name(video)} lên TikTok (quyền xem: ${video.privacy})`,
+        video.caption.slice(0, 80),
+      )
       onPublished?.()
     } catch (err) {
       if (RETRYABLE_CODES.has(err.code)) {
